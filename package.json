@@ -3,20 +3,25 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "node ./bin/www"
+    "start": "node ./bin/www",
+    "dev": "nodemon ./bin/www",
+    "lint": "npx eslint ."
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.0",
     "celebrate": "^15.0.1",
+    "cookie-parser": "^1.4.6",
     "debug": "~2.6.9",
     "express": "~4.16.1",
     "express-rate-limit": "^6.4.0",
     "helmet": "^5.0.2",
     "http-errors": "~1.6.3",
-    "jade": "^1.9.2",
+    "jade": "^0.29.0",
+    "jsonwebtoken": "^8.5.1",
     "mongoose": "^6.3.3",
-    "morgan": "~1.9.1"
+    "morgan": "~1.9.1",
+    "validator": "^13.7.0"
   },
   "description": "tea taste form api",
   "main": "app.js",
@@ -34,5 +39,8 @@
   "bugs": {
     "url": "https://github.com/nikita-konkin/tea-taste-api/issues"
   },
-  "homepage": "https://github.com/nikita-konkin/tea-taste-api#readme"
+  "homepage": "https://github.com/nikita-konkin/tea-taste-api#readme",
+  "devDependencies": {
+    "nodemon": "^2.0.16"
+  }
 }
