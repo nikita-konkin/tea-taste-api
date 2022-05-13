@@ -38,6 +38,8 @@ app.use(require('./routes/signs'));
 app.use(auth);
 
 app.use(require('./routes/users'));
+app.use(require('./routes/aromas'));
+app.use(require('./routes/tastes'));
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
@@ -55,6 +57,7 @@ app.use(function(req, res, next) {
 //   res.render('error');
 // });
 app.use((err, req, res, next) => {
+  console.log(err)
   const statusCode = err.statusCode || 500;
   const message = statusCode === 500 ? 'Server error' : err.message;
    res.status(statusCode).send({
