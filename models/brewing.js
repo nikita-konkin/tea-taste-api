@@ -1,24 +1,24 @@
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
-  aromas: {
-    type: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "aromas",
-        default: [],
-      },
-    ],
-  },
-  tastes: {
-    type: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "tastes",
-        default: [],
-      },
-    ],
-  },
+  // aromas: {
+  //   type: [
+  //     {
+  //       type: mongoose.Schema.Types.ObjectId,
+  //       ref: "aromas",
+  //       default: [],
+  //     },
+  //   ],
+  // },
+  // tastes: {
+  //   type: [
+  //     {
+  //       type: mongoose.Schema.Types.ObjectId,
+  //       ref: "tastes",
+  //       default: [],
+  //     },
+  //   ],
+  // },
   description: {
     type: String,
     required: true,
@@ -30,7 +30,7 @@ const userSchema = new mongoose.Schema({
     required: true,
   },
   brewingTime: {
-    type: time,
+    type: String,
     required: true,
   },
   owner: {
@@ -42,8 +42,8 @@ const userSchema = new mongoose.Schema({
       },
     ],
   },
-  seansId: {
-    type: Number,
+  sessionId: {
+    type: String,
     required: true,
   },
   brewingCount: {
