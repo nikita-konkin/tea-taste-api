@@ -1,4 +1,5 @@
 const Brewing = require("../models/brewing");
+const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 
 module.exports.createBrew = (req, res, next) => {
   const { description, brewingRating, brewingTime } = req.body;
@@ -9,7 +10,7 @@ module.exports.createBrew = (req, res, next) => {
   const brewingCount = req.params.brewId;
 
   Brewing.update(
-    { sessionId: sessionId },
+    { sessionId: sessionId, brewingCount: brewingCount },
     {
       $setOnInsert: {
         // aromas: aromas,
@@ -46,13 +47,22 @@ module.exports.createBrew = (req, res, next) => {
 
 module.exports.getBrews = (req, res, next) => {
   const owner = req.user._id;
-  Brewing.find({owner: owner}).populate('aromas')
-    .then((brews) => res.send({
-      data: brews,
-    }))
+  const sessionId = req.params.sessionId;
+  Brewing.find({ $and: [{ owner: owner }, { sessionId: sessionId }] })
+    .then((brews) =>
+      res.send({
+        data: brews,
+      })
+    )
     .catch((err) => {
       const e = new Error(err.message);
       e.statusCode = 500;
       next(e);
     });
+};
+
+module.exports.delBrewsBySessionID = (req, res, next) => {
+  
+  delBySessionID(req, res, next, Brewing)
+
 };

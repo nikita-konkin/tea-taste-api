@@ -1,4 +1,5 @@
 const Aroma = require("../models/aroma");
+const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 
 module.exports.createAroma = (req, res, next) => {
   const { aromaStage1, aromaStage2, aromaStage3 } = req.body;
@@ -9,7 +10,7 @@ module.exports.createAroma = (req, res, next) => {
   const aromaCount = req.params.aromaId;
 
   Aroma.update(
-    { aromaCount: aromaCount },
+    { aromaCount: aromaCount, brewingCount: brewingCount },
     {
       $setOnInsert: {
         aromaStage1: aromaStage1,
@@ -41,4 +42,10 @@ module.exports.createAroma = (req, res, next) => {
         next(e);
       }
     });
+};
+
+module.exports.delAromaBySessionID = (req, res, next) => {
+  
+  delBySessionID(req, res, next, Aroma)
+
 };

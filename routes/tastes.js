@@ -2,7 +2,7 @@ const router = require("express").Router();
 
 const { celebrate, Joi } = require("celebrate");
 
-const { createTaste } = require("../controllers/tastes");
+const { createTaste, delTasteBySessionID } = require("../controllers/tastes");
 
 router.post(
   "/form/:sessionId/brew/:brewId/taste/:tasteId",
@@ -19,5 +19,5 @@ router.post(
   }),
   createTaste
 );
-
+router.delete("/taste/:sessionId", delTasteBySessionID);
 module.exports = router;

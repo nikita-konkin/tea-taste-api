@@ -2,11 +2,11 @@ const router = require("express").Router();
 
 const { celebrate, Joi } = require("celebrate");
 
-const { createBrew, getBrews } = require("../controllers/brewings");
+const { createBrew, getBrews, delBrewsBySessionID } = require("../controllers/brewings");
 
-router.get('/my-forms', getBrews);
+router.get('/my-brewings/:sessionId', getBrews);
 router.post(
-  "/my-forms/:sessionId",
+  "/my-brewings/:sessionId/brew/:brewId",
   celebrate({
     body: Joi.object().keys({
       // aromas: Joi.array().required(),
@@ -19,9 +19,10 @@ router.post(
     }),
     params: Joi.object().keys({
       sessionId: Joi.string().hex().length(24).required(),
+      brewId: Joi.number().integer().required(),
     }),
   }),
   createBrew
 );
-
+router.delete("/my-brewings/:sessionId", delBrewsBySessionID);
 module.exports = router;

@@ -1,4 +1,5 @@
 const Taste = require("../models/taste");
+const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 
 module.exports.createTaste = (req, res, next) => {
   const { tasteStage1, tasteStage2 } = req.body;
@@ -9,7 +10,7 @@ module.exports.createTaste = (req, res, next) => {
   const tasteCount = req.params.tasteId;
 
   Taste.update(
-    { tasteCount: tasteCount },
+    { tasteCount: tasteCount, brewingCount: brewingCount },
     {
       $setOnInsert: {
         tasteStage1: tasteStage1,
@@ -40,4 +41,8 @@ module.exports.createTaste = (req, res, next) => {
         next(e);
       }
     });
+};
+
+module.exports.delTasteBySessionID = (req, res, next) => {
+  delBySessionID(req, res, next, Taste);
 };

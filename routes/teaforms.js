@@ -2,11 +2,18 @@ const router = require("express").Router();
 
 const { celebrate, Joi } = require("celebrate");
 
-const { createTeaForm, getTeaForms } = require("../controllers/teaforms");
+const {
+  createTeaForm,
+  getTeaForms,
+  getTeaFormsByID,
+  delTeaFormBySessionID,
+} = require("../controllers/teaforms");
 
 router.get("/my-forms", getTeaForms);
+router.get("/my-forms/:sessionId", getTeaFormsByID);
+router.delete("/my-forms/:sessionId", delTeaFormBySessionID);
 router.post(
-  "/form/:sessionId",
+  "/create-form/:sessionId",
   celebrate({
     body: Joi.object().keys({
       nameRU: Joi.string().min(2).max(60).required(),
