@@ -68,7 +68,7 @@ module.exports.delTeaFormBySessionID = (req, res, next) => {
 
 };
 
-module.exports.getTeaForms = (req, res, next) => {
+module.exports.getTeaFormsByID = (req, res, next) => {
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
   TeaForm.find({ owner: owner, sessionId: sessionId })
@@ -84,7 +84,7 @@ module.exports.getTeaForms = (req, res, next) => {
     });
 };
 
-module.exports.getTeaFormsByID = (req, res, next) => {
+module.exports.getTeaForms = (req, res, next) => {
   const owner = req.user._id;
   TeaForm.find({ owner: owner })
     .then((forms) =>
