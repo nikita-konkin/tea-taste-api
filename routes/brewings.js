@@ -6,7 +6,7 @@ const { createBrew, getBrews, delBrewsBySessionID } = require("../controllers/br
 
 router.get('/my-brewings/:sessionId', getBrews);
 router.post(
-  "/my-brewings/:sessionId/brew/:brewId",
+  "/create-form/:sessionId/brew/:brewId",
   celebrate({
     body: Joi.object().keys({
       // aromas: Joi.array().required(),

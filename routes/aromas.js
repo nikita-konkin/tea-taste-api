@@ -5,7 +5,7 @@ const { celebrate, Joi } = require("celebrate");
 const { createAroma, delAromaBySessionID } = require("../controllers/aromas");
 
 router.post(
-  "/form/:sessionId/brew/:brewId/aroma/:aromaId",
+  "/create-form/:sessionId/brew/:brewId/aroma/:aromaId",
   celebrate({
     body: Joi.object().keys({
       aromaStage1: Joi.string().min(2).max(30).required(),

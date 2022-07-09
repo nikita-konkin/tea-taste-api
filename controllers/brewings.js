@@ -9,7 +9,7 @@ module.exports.createBrew = (req, res, next) => {
   const sessionId = req.params.sessionId;
   const brewingCount = req.params.brewId;
 
-  Brewing.update(
+  Brewing.updateMany(
     { sessionId: sessionId, brewingCount: brewingCount },
     {
       $setOnInsert: {

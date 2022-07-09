@@ -5,7 +5,7 @@ const { celebrate, Joi } = require("celebrate");
 const { createTaste, delTasteBySessionID } = require("../controllers/tastes");
 
 router.post(
-  "/form/:sessionId/brew/:brewId/taste/:tasteId",
+  "/create-form/:sessionId/brew/:brewId/taste/:tasteId",
   celebrate({
     body: Joi.object().keys({
       tasteStage1: Joi.string().min(2).max(30).required(),
