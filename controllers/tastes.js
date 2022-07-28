@@ -1,5 +1,6 @@
 const Taste = require("../models/taste");
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
+const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId");
 
 module.exports.createTaste = (req, res, next) => {
   const { tasteStage1, tasteStage2 } = req.body;
@@ -10,7 +11,8 @@ module.exports.createTaste = (req, res, next) => {
   const tasteCount = req.params.tasteId;
 
   Taste.update(
-    { tasteCount: tasteCount, brewingCount: brewingCount },
+    { tasteCount: tasteCount, brewingCount: brewingCount,
+      sessionId: sessionId, brewingCount: brewingCount },
     {
       $setOnInsert: {
         tasteStage1: tasteStage1,
@@ -31,7 +33,7 @@ module.exports.createTaste = (req, res, next) => {
     .catch((err) => {
       if (err.name === "ValidationError") {
         const e = new Error(
-          "400 — Переданы некорректные данные при создании карточки фильма."
+          "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
         next(err);
@@ -43,6 +45,55 @@ module.exports.createTaste = (req, res, next) => {
     });
 };
 
+module.exports.patchTaste = (req, res, next) => {
+  const { tasteStage1, tasteStage2 } = req.body;
+
+  const owner = req.user._id;
+  const sessionId = req.params.sessionId;
+  const brewingCount = req.params.brewId;
+  const tasteCount = req.params.tasteId;
+
+  Taste.findOneAndUpdate(
+    { tasteCount: tasteCount, brewingCount: brewingCount,
+      sessionId: sessionId, brewingCount: brewingCount },
+    {
+      tasteStage1: tasteStage1,
+      tasteStage2: tasteStage2,
+      sessionId: sessionId,
+      tasteCount: tasteCount,
+      brewingCount: brewingCount,
+      owner: owner,
+    },
+    {new : true}
+  )
+    .then((taste) =>
+      res.send({
+        data: taste,
+      })
+    )
+    .catch((err) => {
+      if (err.name === "ValidationError") {
+        const e = new Error(
+          "400 — Переданы некорректные данные."
+        );
+        e.statusCode = 400;
+        next(err);
+      } else {
+        const e = new Error("500 — Ошибка по умолчанию.");
+        e.statusCode = 500;
+        next(e);
+      }
+    });
+};
+
+module.exports.getTastes = (req, res, next) => {
+
+  getTeaDataBySessionId(req, res, next, Taste)
+
+}
+
 module.exports.delTasteBySessionID = (req, res, next) => {
+
   delBySessionID(req, res, next, Taste);
+
 };
