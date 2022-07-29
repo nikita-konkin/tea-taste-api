@@ -20,7 +20,7 @@ module.exports.createTeaForm = (req, res, next) => {
   const sessionId = req.params.sessionId;
   // const brewingCount = req.params.brewId;
 
-  TeaForm.update(
+  TeaForm.updateMany(
     {
       sessionId: sessionId,
       owner: owner,

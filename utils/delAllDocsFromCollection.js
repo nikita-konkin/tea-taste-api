@@ -12,7 +12,7 @@ module.exports.delBySessionID = (req, res, next, schema) => {
     })
     .then((response) => {
       if (response) {
-        schema.remove({
+        schema.deleteMany({
           owner: owner,
           sessionId: sessionId,
         }).then((data) => {
@@ -30,7 +30,7 @@ module.exports.delBySessionID = (req, res, next, schema) => {
     .catch((err) => {
       if (err.name === "CastError") {
         const e = new Error(
-          "400 — Переданы некорректные данные для удаления карточки."
+          "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
         next(e);

@@ -10,7 +10,7 @@ module.exports.createTaste = (req, res, next) => {
   const brewingCount = req.params.brewId;
   const tasteCount = req.params.tasteId;
 
-  Taste.update(
+  Taste.updateMany(
     { tasteCount: tasteCount, brewingCount: brewingCount,
       sessionId: sessionId, brewingCount: brewingCount },
     {
@@ -97,3 +97,42 @@ module.exports.delTasteBySessionID = (req, res, next) => {
   delBySessionID(req, res, next, Taste);
 
 };
+
+module.exports.delTasteSelective = (req, res, next) => {
+
+  const owner = req.user._id;
+  const sessionId = req.params.sessionId;
+
+  const brewingCount = req.params.brewId;
+  const tasteCount = req.params.tasteId;
+
+  Taste.deleteMany(
+    {
+      owner: owner,
+      sessionId: sessionId,
+      brewingCount: brewingCount,
+      tasteCount: tasteCount, 
+    }
+  )
+  .then(
+    (response) => 
+    {res.send({
+      data: response,
+    });
+    return response;
+    })
+  .catch( (err) => {
+    if (err.name === "ValidationError") {
+      const e = new Error(
+        "400 — Переданы некорректные данные."
+        );
+      e.statusCode = 400;
+      next(e);
+    }  else {
+      const e = new Error("500 — Ошибка по умолчанию.");
+      e.statusCode = 500;
+      next(e);
+    }
+  });
+
+}

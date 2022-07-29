@@ -6,7 +6,8 @@ const {
   createTaste,
   delTasteBySessionID,
   getTastes,
-  patchTaste
+  patchTaste,
+  delTasteSelective,
    } = require("../controllers/tastes");
 
 router.post(
@@ -41,4 +42,5 @@ router.patch(
 );
 router.get("/my-tastes/:sessionId", getTastes);
 router.delete("/taste/:sessionId", delTasteBySessionID);
+router.delete("/my-tastes/:sessionId/brew/:brewId/taste/:tasteId", delTasteSelective);
 module.exports = router;
