@@ -9,12 +9,45 @@ const cookieParser = require('cookie-parser');
 // const usersRouter = require('./routes/users');
 const auth = require('./middlewares/auth');
 
+const allowedCors = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+];
+
 const app = express();
 
 const port = process.env.NODE_ENV === 'production' ? process.env.PORT : 3000;
 const mdbAddr = process.env.NODE_ENV === 'production' ? process.env.MONDOADDRESS : 'localhost:27017/teadb';
 
 app.use(cookieParser());
+
+app.use((req, res, next) => {
+  const {
+    origin,
+  } = req.headers;
+
+  if (allowedCors.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', true);
+  }
+  next();
+});
+
+app.use((req, res, next) => {
+  const DEFAULT_ALLOWED_METHODS = 'GET,HEAD,PUT,PATCH,POST,DELETE';
+  const requestHeaders = req.headers['access-control-request-headers'];
+
+  const {
+    method,
+  } = req;
+
+  if (method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Methods', DEFAULT_ALLOWED_METHODS);
+    res.header('Access-Control-Allow-Headers', requestHeaders);
+    return res.end();
+  }
+  next();
+});
 
 mongoose.connect(`mongodb://${mdbAddr}`, {
   useNewUrlParser: true,
