@@ -15,8 +15,8 @@ router.post(
   celebrate({
     body: Joi.object().keys({
       aromaStage1: Joi.string().min(2).max(30).required(),
-      aromaStage2: Joi.string().min(2).max(30).required(),
-      aromaStage3: Joi.string().min(2).max(30).required(),
+      aromaStage2: Joi.string().min(0).max(30),
+      aromaStage3: Joi.string().min(0).max(30),
     }),
     params: Joi.object().keys({
       sessionId: Joi.string().hex().length(24).required(),
@@ -31,9 +31,9 @@ router.patch(
   "/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId",
   celebrate({
     body: Joi.object().keys({
-      aromaStage1: Joi.string().min(2).max(30).required(),
-      aromaStage2: Joi.string().min(2).max(30).required(),
-      aromaStage3: Joi.string().min(2).max(30).required(),
+      aromaStage1: Joi.string().min(2).max(30),
+      aromaStage2: Joi.string().min(0).max(30),
+      aromaStage3: Joi.string().min(0).max(30),
     }),
     params: Joi.object().keys({
       sessionId: Joi.string().hex().length(24).required(),

@@ -12,9 +12,10 @@ module.exports.createAroma = (req, res, next) => {
 
   Aroma.updateMany(
     { aromaCount: aromaCount, brewingCount: brewingCount,
-      sessionId: sessionId, brewingCount: brewingCount },
+      sessionId: sessionId, brewingCount: brewingCount 
+    },
     {
-      $setOnInsert: {
+      $set: {
         aromaStage1: aromaStage1,
         aromaStage2: aromaStage2,
         aromaStage3: aromaStage3,

@@ -10,13 +10,13 @@ const userSchema = new mongoose.Schema({
   },
   aromaStage2: {
     type: String,
-    required: true,
+    required: false,
     minlength: 2,
     maxlength: 30,
   },
   aromaStage3: {
     type: String,
-    required: true,
+    required: false,
     minlength: 2,
     maxlength: 30,
   },
