@@ -29,7 +29,7 @@ module.exports.createBrew = (req, res, next) => {
   )
     .then((brew) =>
       res.send({
-        data: brew,
+        brew,
       })
     )
     .catch((err) => {

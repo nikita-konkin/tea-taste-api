@@ -11,7 +11,7 @@ const {
 
 router.get('/my-brewings/:sessionId', getBrews);
 router.post(
-  "/create-form/:sessionId/brew/:brewId",
+  "/my-brewings/:sessionId/brew/:brewId",
   celebrate({
     body: Joi.object().keys({
       // aromas: Joi.array().required(),

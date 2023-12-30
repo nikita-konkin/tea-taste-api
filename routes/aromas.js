@@ -11,7 +11,7 @@ const {
   } = require("../controllers/aromas");
 
 router.post(
-  "/create-form/:sessionId/brew/:brewId/aroma/:aromaId",
+  "/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId",
   celebrate({
     body: Joi.object().keys({
       aromaStage1: Joi.string().min(2).max(30).required(),
