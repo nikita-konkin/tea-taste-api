@@ -12,6 +12,7 @@ const auth = require('./middlewares/auth');
 const allowedCors = [
   'http://localhost:3000',
   'http://localhost:3001',
+  'http://172.19.0.1:3001'
 ];
 
 const app = express();

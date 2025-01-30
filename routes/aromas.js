@@ -7,7 +7,8 @@ const {
   delAromaBySessionID,
   getAromas,
   patchAroma,
-  delAromaSelective
+  delAromaSelective,
+  getAllFromAromaDB,
   } = require("../controllers/aromas");
 
 router.post(
@@ -44,7 +45,8 @@ router.patch(
   patchAroma
 );
 
-router.get("/my-aromas/:sessionId", getAromas)
+router.get("/my-aromas/:sessionId", getAromas);
+router.get("/aromadb", getAllFromAromaDB);
 router.delete("/aroma/:sessionId", delAromaBySessionID);
 router.delete("/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId", delAromaSelective);
 module.exports = router;

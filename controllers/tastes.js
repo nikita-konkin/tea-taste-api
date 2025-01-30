@@ -1,4 +1,5 @@
 const Taste = require("../models/taste");
+const TasteDB = require('../models/tasteDB');
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId");
 
@@ -47,6 +48,7 @@ module.exports.createTaste = (req, res, next) => {
 
 module.exports.patchTaste = (req, res, next) => {
   const { tasteStage1, tasteStage2 } = req.body;
+  // const { tasteStage2 } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -57,7 +59,7 @@ module.exports.patchTaste = (req, res, next) => {
     { tasteCount: tasteCount, brewingCount: brewingCount,
       sessionId: sessionId, brewingCount: brewingCount },
     {
-      tasteStage1: tasteStage1,
+      // tasteStage1: tasteStage1,
       tasteStage2: tasteStage2,
       sessionId: sessionId,
       tasteCount: tasteCount,
@@ -134,5 +136,20 @@ module.exports.delTasteSelective = (req, res, next) => {
       next(e);
     }
   });
+}
+
+module.exports.getAllFromTasteDB = (req, res, next) => {
+
+  TasteDB.find({})  
+  .then((response) =>
+    res.send({
+      response,
+    })
+  )
+  .catch((err) => {
+    const e = new Error(err.message);
+    e.statusCode - 500;
+    next(e)
+  })
 
 }

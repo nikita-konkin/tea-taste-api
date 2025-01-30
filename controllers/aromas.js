@@ -1,4 +1,6 @@
 const Aroma = require("../models/aroma");
+const AromaDB = require('../models/aromaDB');
+
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId")
 
@@ -138,5 +140,23 @@ module.exports.delAromaSelective = (req, res, next) => {
       next(e);
     }
   });
+  
+}
+
+
+module.exports.getAllFromAromaDB = (req, res, next) => {
+
+  AromaDB.find({})  
+  .then((response) =>
+    res.send({
+      response,
+    })
+  )
+  .catch((err) => {
+    const e = new Error(err.message);
+    e.statusCode - 500;
+    next(e)
+  })
 
 }
+
