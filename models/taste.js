@@ -9,7 +9,13 @@ const userSchema = new mongoose.Schema({
   },
   tasteStage2: {
     type: String,
-    required: true,
+    required: false,
+    minlength: 2,
+    maxlength: 30,
+  },
+  tasteStage3: {
+    type: String,
+    required: false,
     minlength: 2,
     maxlength: 30,
   },

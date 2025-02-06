@@ -73,6 +73,8 @@ module.exports.createUser = (req, res, next) => {
       },
     }))
     .catch((err) => {
+      console.log('err.name')
+      console.log(err)
       if (err.name === 'ValidationError') {
         const e = new Error('400 — Переданы некорректные данные при создании карточки.');
         e.statusCode = 400;
@@ -86,6 +88,7 @@ module.exports.createUser = (req, res, next) => {
         e.statusCode = 500;
         next(e);
       }
+      next(e);
     });
 };
 

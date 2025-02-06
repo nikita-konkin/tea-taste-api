@@ -61,15 +61,16 @@ module.exports.patchAroma = (req, res, next) => {
     { aromaCount: aromaCount, brewingCount: brewingCount,
       sessionId: sessionId, brewingCount: brewingCount },
     {
+      $set : {
       aromaStage1: aromaStage1,
       aromaStage2: aromaStage2,
       aromaStage3: aromaStage3,
       sessionId: sessionId,
       aromaCount: aromaCount,
       brewingCount: brewingCount,
-      owner: owner,
+      owner: owner,}
     },
-    {new : true}
+    {new : true, runValidators: true}
   )
     .then((aroma) =>
       res.send({

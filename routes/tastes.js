@@ -16,10 +16,11 @@ router.post(
   celebrate({
     body: Joi.object().keys({
       tasteStage1: Joi.string().min(2).max(30).required(),
-      tasteStage2: Joi.string().min(2).max(30),
+      tasteStage2: Joi.string().min(0).max(30),
+      tasteStage3: Joi.string().min(0).max(30),
     }),
     params: Joi.object().keys({
-      sessionId: Joi.string().hex().length(24).required(),
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
       brewId: Joi.number().integer().required(),
       tasteId: Joi.number().integer().required(),
     }),
@@ -31,10 +32,11 @@ router.patch(
   celebrate({
     body: Joi.object().keys({
       tasteStage1: Joi.string().min(2).max(30),
-      tasteStage2: Joi.string().min(2).max(30),
+      tasteStage2: Joi.string().min(0).max(30),
+      tasteStage3: Joi.string().min(0).max(30),
     }),
     params: Joi.object().keys({
-      sessionId: Joi.string().hex().length(24).required(),
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
       brewId: Joi.number().integer().required(),
       tasteId: Joi.number().integer().required(),
     }),

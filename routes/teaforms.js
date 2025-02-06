@@ -28,7 +28,7 @@ router.post(
       country: Joi.string().min(2).max(60).required(),
     }),
     params: Joi.object().keys({
-      sessionId: Joi.string().hex().length(24).required(),
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
     }),
   }),
   createTeaForm
@@ -47,7 +47,7 @@ router.patch("/create-form/:sessionId",
       country: Joi.string().min(2).max(60).required(),
     }),
     params: Joi.object().keys({
-      sessionId: Joi.string().hex().length(24).required(),
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
     }),
   }),
   patchTeaForm

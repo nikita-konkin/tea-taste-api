@@ -23,7 +23,7 @@ router.post(
       ),
     }),
     params: Joi.object().keys({
-      sessionId: Joi.string().hex().length(24).required(),
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
       brewId: Joi.number().integer().required(),
     }),
   }),
@@ -42,7 +42,7 @@ router.patch(
       ),
     }),
     params: Joi.object().keys({
-      sessionId: Joi.string().hex().length(24).required(),
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
       brewId: Joi.number().integer().required(),
     }),
   }),
