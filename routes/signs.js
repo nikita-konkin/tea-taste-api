@@ -14,18 +14,28 @@ const {
 // Define the Joi schema
 
 
-const passwordSchema = Joi.string().required().pattern(new RegExp('^[a-zA-Z0-9]{3,30}$')).min(8).label('Password').messages({
-  'string.pattern.base': 'Your {#label} does not match the suggested pattern',
-  'string.base': 'Your {#label} should match the suggested pattern',
-  'string.empty': 'Your {#label} cannot be empty',
-  'string.min': 'Ваш "пароль" должен иметь минимум {#limit} знаков',
-  'any.required': 'Your {#label} is required',
+const passwordSchema = Joi.string()
+.required()
+.pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};\'":|,.<>\\/?]).{4,30}$'))
+.min(4)
+.label('пароль')
+.messages({
+  'string.pattern.base': 'Ваш "пароль" должен содержать только буквы (как заглавные, так и строчные), цифры и символы и иметь длину от 4 до 30 символов.',
+  'string.base': 'Ваш "пароль" должен содержать только буквы (как заглавные, так и строчные), цифры и символы и иметь длину от 4 до 30 символов.',
+  'string.empty': 'Ваш "пароль" не может быть рустым.',
+  'string.min': 'Ваш "пароль" должен иметь минимум {#limit} знаков.',
+  'any.required': 'Введите "пароль".',
 });
-
+const emailSchema = Joi.string().email().required().label('email').messages({
+  'string.email': 'Ваш {#label} должен быть действительным адресом электронной почты.',
+  'string.base': 'Ваш {#label} должен быть строкой.',
+  'string.empty': 'Ваш {#label} не может быть пустым.',
+  'any.required': 'Введите {#label}.',
+});
 
 router.post('/sign-in', celebrate({
   [Segments.BODY]: Joi.object().keys({
-    email: Joi.string().email().required(),
+    email: emailSchema,
     password: passwordSchema,
   }),
 }), loginUser);
@@ -33,7 +43,7 @@ router.post('/sign-in', celebrate({
 router.post('/sign-up', celebrate({
   [Segments.BODY]: Joi.object().keys({
     name: Joi.string().min(1).max(30).required(),
-    email: Joi.string().email().required(),
+    email: emailSchema,
     password: passwordSchema,
   }),
 }),

@@ -20,7 +20,8 @@ const allowedCors = [
   'http://10.20.130.148:3001',
   'http://10.20.130.148:3000',
   'http://192.168.137.1:3001',
-  'http://192.168.137.1:3001'
+  'http://192.168.137.1:3001',
+  'http://192.168.50.33:3000'
 ];
 
 const app = express();
@@ -99,8 +100,9 @@ app.use((err, req, res, next) => {
 
     return res.status(400).json({
       status: 'error',
-      message: 'Validation failed',
-      details: errorDetails,
+      message: errorDetails.body[0],
+      // message: 'Validation failed',
+      // details: errorDetails,
     });
   }
 

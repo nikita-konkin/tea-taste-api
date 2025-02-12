@@ -32,6 +32,10 @@ const userSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    price: {
+      type: Number,
+      required: true,
+    },
     teaware: {
       type: String,
       required: true,

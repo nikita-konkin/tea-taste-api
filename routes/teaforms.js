@@ -11,8 +11,8 @@ const {
 } = require("../controllers/teaforms");
 
 router.get("/my-forms", getTeaForms);
-router.get("/my-forms/:sessionId", getTeaFormsByID);
-router.delete("/my-forms/:sessionId", delTeaFormBySessionID);
+router.get("/my-form/:sessionId", getTeaFormsByID);
+router.delete("/my-form/:sessionId", delTeaFormBySessionID);
 router.post(
   "/create-form/:sessionId",
   celebrate({
@@ -23,6 +23,7 @@ router.post(
       water: Joi.string().min(2).max(60).required(),
       volume: Joi.number().integer().required(),
       temperature: Joi.number().integer().required(),
+      price: Joi.number().integer().required(),
       teaware: Joi.string().min(2).max(60).required(),
       brewingtype: Joi.string().min(2).max(60).required(),
       country: Joi.string().min(2).max(60).required(),
@@ -42,6 +43,7 @@ router.patch("/create-form/:sessionId",
       water: Joi.string().min(2).max(60).required(),
       volume: Joi.number().integer().required(),
       temperature: Joi.number().integer().required(),
+      price: Joi.number().integer().required(),
       teaware: Joi.string().min(2).max(60).required(),
       brewingtype: Joi.string().min(2).max(60).required(),
       country: Joi.string().min(2).max(60).required(),

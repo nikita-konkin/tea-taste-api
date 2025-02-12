@@ -48,5 +48,5 @@ router.patch(
   }),
   patchBrew
 );
-router.delete("/my-brewings/:sessionId", delBrewsBySessionID);
+router.delete("/my-brews/:sessionId", delBrewsBySessionID);
 module.exports = router;

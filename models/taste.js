@@ -16,7 +16,7 @@ const userSchema = new mongoose.Schema({
   tasteStage3: {
     type: String,
     required: false,
-    minlength: 2,
+    minlength: 0,
     maxlength: 30,
   },
   owner: {

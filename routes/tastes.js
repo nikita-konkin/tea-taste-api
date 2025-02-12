@@ -45,6 +45,6 @@ router.patch(
 );
 router.get("/my-tastes/:sessionId", getTastes);
 router.get("/tastedb", getAllFromTasteDB);
-router.delete("/taste/:sessionId", delTasteBySessionID);
+router.delete("/my-tastes/:sessionId", delTasteBySessionID);
 router.delete("/my-tastes/:sessionId/brew/:brewId/taste/:tasteId", delTasteSelective);
 module.exports = router;
