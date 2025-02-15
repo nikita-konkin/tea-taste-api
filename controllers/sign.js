@@ -39,7 +39,9 @@ module.exports.loginUser = (req, res, next) => {
         // domain: 'nomoredomains.xyz',
         // sameSite: 'None'
       })
-        .end('{}');
+        // .end('{}');
+      res.status(200).json({ ok: true, message: 'Login successful', token })
+      // .end('{}');
 
       // return '';
     })
@@ -53,6 +55,7 @@ module.exports.loginUser = (req, res, next) => {
 };
 
 module.exports.createUser = (req, res, next) => {
+  console.log(req.body)
   const {
     name,
     email,
@@ -72,26 +75,29 @@ module.exports.createUser = (req, res, next) => {
       },
     }))
     .catch((err) => {
+      console.log('err.name')
+      console.log(err)
       if (err.name === 'ValidationError') {
-        const e = new Error('400 — Переданы некорректные данные при создании карточки.');
+        const e = new Error('Переданы некорректные данные при создании карточки.');
         e.statusCode = 400;
         next(e);
       } else if (err.code === 11000) {
-        const e = new Error('409 - Пользователь уже зарегистрирован по данному email.');
+        const e = new Error('Пользователь уже зарегистрирован по данному email.');
         e.statusCode = 409;
         next(e);
       } else {
-        const e = new Error('500 — Ошибка по умолчанию.');
+        const e = new Error('Ошибка по умолчанию.');
         e.statusCode = 500;
         next(e);
       }
+      next(err);
     });
 };
 
 module.exports.logoutUser = (req, res, next) => {
   try {
     res.clearCookie('jwt')
-    .res.end('{logout}');
+    res.status(200).json({ ok: true, message: 'LogOut successful' });
   } catch (err) {
     const e = new Error('401 - Необходима авторизация.');
     e.statusCode = 401;

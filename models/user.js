@@ -19,6 +19,8 @@ const userSchema = new mongoose.Schema({
     required: true,
     validate: validator.isStrongPassword,
     select: false,
+    minlength: 4,
+    maxlength: 60,
   },
   career: {
     type: String,

@@ -7,19 +7,20 @@ const {
   delAromaBySessionID,
   getAromas,
   patchAroma,
-  delAromaSelective
+  delAromaSelective,
+  getAllFromAromaDB,
   } = require("../controllers/aromas");
 
 router.post(
-  "/create-form/:sessionId/brew/:brewId/aroma/:aromaId",
+  "/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId",
   celebrate({
     body: Joi.object().keys({
       aromaStage1: Joi.string().min(2).max(30).required(),
-      aromaStage2: Joi.string().min(2).max(30).required(),
-      aromaStage3: Joi.string().min(2).max(30).required(),
+      aromaStage2: Joi.string().min(0).max(30),
+      aromaStage3: Joi.string().min(0).max(30),
     }),
     params: Joi.object().keys({
-      sessionId: Joi.string().hex().length(24).required(),
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
       brewId: Joi.number().integer().required(),
       aromaId: Joi.number().integer().required(),
     }),
@@ -31,12 +32,12 @@ router.patch(
   "/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId",
   celebrate({
     body: Joi.object().keys({
-      aromaStage1: Joi.string().min(2).max(30).required(),
-      aromaStage2: Joi.string().min(2).max(30).required(),
-      aromaStage3: Joi.string().min(2).max(30).required(),
+      aromaStage1: Joi.string().min(2).max(30),
+      aromaStage2: Joi.string().min(0).max(30),
+      aromaStage3: Joi.string().min(0).max(30),
     }),
     params: Joi.object().keys({
-      sessionId: Joi.string().hex().length(24).required(),
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
       brewId: Joi.number().integer().required(),
       aromaId: Joi.number().integer().required(),
     }),
@@ -44,7 +45,8 @@ router.patch(
   patchAroma
 );
 
-router.get("/my-aromas/:sessionId", getAromas)
-router.delete("/aroma/:sessionId", delAromaBySessionID);
+router.get("/my-aromas/:sessionId", getAromas);
+router.get("/aromadb", getAllFromAromaDB);
+router.delete("/my-aromas/:sessionId", delAromaBySessionID);
 router.delete("/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId", delAromaSelective);
 module.exports = router;

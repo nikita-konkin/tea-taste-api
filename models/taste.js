@@ -9,8 +9,14 @@ const userSchema = new mongoose.Schema({
   },
   tasteStage2: {
     type: String,
-    required: true,
-    minlength: 2,
+    required: false,
+    minlength: 0,
+    maxlength: 30,
+  },
+  tasteStage3: {
+    type: String,
+    required: false,
+    minlength: 0,
     maxlength: 30,
   },
   owner: {

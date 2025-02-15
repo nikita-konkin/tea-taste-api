@@ -4,10 +4,25 @@ const path = require('path');
 const logger = require('morgan');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
+const { isCelebrateError } = require('celebrate');
 
 // const indexRouter = require('./routes/index');
 // const usersRouter = require('./routes/users');
 const auth = require('./middlewares/auth');
+
+const allowedCors = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://192.168.50.33:3001',
+  'http://192.168.50.33:3000',
+  'http://192.168.50.112:3001',
+  'http://192.168.50.112:3000',
+  'http://10.20.130.148:3001',
+  'http://10.20.130.148:3000',
+  'http://192.168.137.1:3001',
+  'http://192.168.137.1:3001',
+  'http://192.168.50.33:3000'
+];
 
 const app = express();
 
@@ -15,6 +30,34 @@ const port = process.env.NODE_ENV === 'production' ? process.env.PORT : 3000;
 const mdbAddr = process.env.NODE_ENV === 'production' ? process.env.MONDOADDRESS : 'localhost:27017/teadb';
 
 app.use(cookieParser());
+
+app.use((req, res, next) => {
+  const {
+    origin,
+  } = req.headers;
+
+  if (allowedCors.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', true);
+  }
+  next();
+});
+
+app.use((req, res, next) => {
+  const DEFAULT_ALLOWED_METHODS = 'GET,HEAD,PUT,PATCH,POST,DELETE';
+  const requestHeaders = req.headers['access-control-request-headers'];
+
+  const {
+    method,
+  } = req;
+
+  if (method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Methods', DEFAULT_ALLOWED_METHODS);
+    res.header('Access-Control-Allow-Headers', requestHeaders);
+    return res.end();
+  }
+  next();
+});
 
 mongoose.connect(`mongodb://${mdbAddr}`, {
   useNewUrlParser: true,
@@ -47,27 +90,35 @@ app.use(require('./routes/teaforms'));
 app.use(function(req, res, next) {
   next(createError(404));
 });
-
-// error handler
-// app.use(function(err, req, res, next) {
-//   // set locals, only providing error in development
-//   res.locals.message = err.message;
-//   res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-//   // render the error page
-//   res.status(err.status || 500);
-//   res.render('error');
-// });
+// app.use(errors());
 app.use((err, req, res, next) => {
-  console.log(err)
-  console.log('err')
+  if (isCelebrateError(err)) {
+    const errorDetails = {};
+    err.details.forEach((value, key) => {
+      errorDetails[key] = value.details.map(detail => detail.message);
+    });
+
+    return res.status(400).json({
+      status: 'error',
+      message: errorDetails.body[0],
+      // message: 'Validation failed',
+      // details: errorDetails,
+    });
+  }
+
+  next(err);
+});
+
+app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
+  console.log(err.message); // Log the error message
   const message = statusCode === 500 ? 'Server error' : err.message;
-   res.status(statusCode).send({
+  res.status(statusCode).json({
+    status: 'error',
     message,
   });
 
-  next();
+  next(err);
 });
 
 module.exports = app;

@@ -1,4 +1,6 @@
 const Aroma = require("../models/aroma");
+const AromaDB = require('../models/aromaDB');
+
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId")
 
@@ -12,9 +14,10 @@ module.exports.createAroma = (req, res, next) => {
 
   Aroma.updateMany(
     { aromaCount: aromaCount, brewingCount: brewingCount,
-      sessionId: sessionId, brewingCount: brewingCount },
+      sessionId: sessionId, brewingCount: brewingCount 
+    },
     {
-      $setOnInsert: {
+      $set: {
         aromaStage1: aromaStage1,
         aromaStage2: aromaStage2,
         aromaStage3: aromaStage3,
@@ -58,15 +61,16 @@ module.exports.patchAroma = (req, res, next) => {
     { aromaCount: aromaCount, brewingCount: brewingCount,
       sessionId: sessionId, brewingCount: brewingCount },
     {
+      $set : {
       aromaStage1: aromaStage1,
       aromaStage2: aromaStage2,
       aromaStage3: aromaStage3,
       sessionId: sessionId,
       aromaCount: aromaCount,
       brewingCount: brewingCount,
-      owner: owner,
+      owner: owner,}
     },
-    {new : true}
+    {new : true, runValidators: true}
   )
     .then((aroma) =>
       res.send({
@@ -137,5 +141,23 @@ module.exports.delAromaSelective = (req, res, next) => {
       next(e);
     }
   });
+  
+}
+
+
+module.exports.getAllFromAromaDB = (req, res, next) => {
+
+  AromaDB.find({})  
+  .then((response) =>
+    res.send({
+      response,
+    })
+  )
+  .catch((err) => {
+    const e = new Error(err.message);
+    e.statusCode - 500;
+    next(e)
+  })
 
 }
+

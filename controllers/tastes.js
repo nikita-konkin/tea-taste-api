@@ -1,9 +1,10 @@
 const Taste = require("../models/taste");
+const TasteDB = require('../models/tasteDB');
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId");
 
 module.exports.createTaste = (req, res, next) => {
-  const { tasteStage1, tasteStage2 } = req.body;
+  const { tasteStage1, tasteStage2, tasteStage3 } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -17,6 +18,7 @@ module.exports.createTaste = (req, res, next) => {
       $setOnInsert: {
         tasteStage1: tasteStage1,
         tasteStage2: tasteStage2,
+        tasteStage3: tasteStage3,
         sessionId: sessionId,
         tasteCount: tasteCount,
         brewingCount: brewingCount,
@@ -46,7 +48,8 @@ module.exports.createTaste = (req, res, next) => {
 };
 
 module.exports.patchTaste = (req, res, next) => {
-  const { tasteStage1, tasteStage2 } = req.body;
+  const { tasteStage1, tasteStage2,  tasteStage3} = req.body;
+  // const { tasteStage2 } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -56,15 +59,16 @@ module.exports.patchTaste = (req, res, next) => {
   Taste.findOneAndUpdate(
     { tasteCount: tasteCount, brewingCount: brewingCount,
       sessionId: sessionId, brewingCount: brewingCount },
-    {
+    {$set : {
       tasteStage1: tasteStage1,
       tasteStage2: tasteStage2,
+      tasteStage3: tasteStage3,
       sessionId: sessionId,
       tasteCount: tasteCount,
       brewingCount: brewingCount,
       owner: owner,
-    },
-    {new : true}
+    }},
+    {new : true, runValidators: true }
   )
     .then((taste) =>
       res.send({
@@ -134,5 +138,20 @@ module.exports.delTasteSelective = (req, res, next) => {
       next(e);
     }
   });
+}
+
+module.exports.getAllFromTasteDB = (req, res, next) => {
+
+  TasteDB.find({})  
+  .then((response) =>
+    res.send({
+      response,
+    })
+  )
+  .catch((err) => {
+    const e = new Error(err.message);
+    e.statusCode - 500;
+    next(e)
+  })
 
 }
