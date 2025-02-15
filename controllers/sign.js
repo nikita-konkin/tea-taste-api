@@ -40,7 +40,8 @@ module.exports.loginUser = (req, res, next) => {
         // sameSite: 'None'
       })
         // .end('{}');
-      res.status(200).json({ ok: true, message: 'Login successful' });
+      res.status(200).json({ ok: true, message: 'Login successful', token })
+      // .end('{}');
 
       // return '';
     })
@@ -96,7 +97,7 @@ module.exports.createUser = (req, res, next) => {
 module.exports.logoutUser = (req, res, next) => {
   try {
     res.clearCookie('jwt')
-    .res.end('{logout}');
+    res.status(200).json({ ok: true, message: 'LogOut successful' });
   } catch (err) {
     const e = new Error('401 - Необходима авторизация.');
     e.statusCode = 401;

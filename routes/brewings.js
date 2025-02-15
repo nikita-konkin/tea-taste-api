@@ -16,7 +16,7 @@ router.post(
     body: Joi.object().keys({
       // aromas: Joi.array().required(),
       // tastes: Joi.array().required(),
-      description: Joi.string().min(2).max(2000),
+      description: Joi.string().min(1).max(2000),
       brewingRating: Joi.number().integer(),
       brewingTime: Joi.string().regex(
         /^(2[0-3]|[01]?[0-9]):([0-5]?[0-9]):([0-5]?[0-9])$/

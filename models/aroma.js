@@ -11,13 +11,13 @@ const userSchema = new mongoose.Schema({
   aromaStage2: {
     type: String,
     required: false,
-    minlength: 2,
+    minlength: 0,
     maxlength: 30,
   },
   aromaStage3: {
     type: String,
     required: false,
-    minlength: 2,
+    minlength: 0,
     maxlength: 30,
   },
   owner: {

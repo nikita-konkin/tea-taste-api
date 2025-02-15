@@ -10,7 +10,7 @@ const userSchema = new mongoose.Schema({
   tasteStage2: {
     type: String,
     required: false,
-    minlength: 2,
+    minlength: 0,
     maxlength: 30,
   },
   tasteStage3: {
