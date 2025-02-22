@@ -1,3 +1,4 @@
+require('dotenv').config();
 const createError = require('http-errors');
 const express = require('express');
 const path = require('path');
@@ -10,25 +11,14 @@ const { isCelebrateError } = require('celebrate');
 // const usersRouter = require('./routes/users');
 const auth = require('./middlewares/auth');
 
-const allowedCors = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://192.168.50.33:3001',
-  'http://192.168.50.33:3000',
-  'http://192.168.50.112:3001',
-  'http://192.168.50.112:3000',
-  'http://10.20.130.148:3001',
-  'http://10.20.130.148:3000',
-  'http://192.168.137.1:3001',
-  'http://192.168.137.1:3001',
-  'http://192.168.50.33:3000'
-];
+const allowedCors = process.env.REACT_APP_ALLOWED_CORS
 
 const app = express();
 
-const port = process.env.NODE_ENV === 'production' ? process.env.PORT : 3000;
-const mdbAddr = process.env.NODE_ENV === 'production' ? process.env.MONDOADDRESS : 'localhost:27017/teadb';
-
+const port = process.env.REACT_APP_PORT;
+const mdbAddr = process.env.REACT_APP_MONGO_URI;
+// console.log(mdbAddr);
+// console.log(allowedCors)
 app.use(cookieParser());
 
 app.use((req, res, next) => {
@@ -44,7 +34,7 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  const DEFAULT_ALLOWED_METHODS = 'GET,HEAD,PUT,PATCH,POST,DELETE';
+
   const requestHeaders = req.headers['access-control-request-headers'];
 
   const {
@@ -52,14 +42,14 @@ app.use((req, res, next) => {
   } = req;
 
   if (method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Methods', DEFAULT_ALLOWED_METHODS);
+    res.header('Access-Control-Allow-Methods', process.env.DEFAULT_ALLOWED_METHODS);
     res.header('Access-Control-Allow-Headers', requestHeaders);
     return res.end();
   }
   next();
 });
 
-mongoose.connect(`mongodb://${mdbAddr}`, {
+mongoose.connect(`${mdbAddr}`, {
   useNewUrlParser: true,
 }).then(() => {
   console.error('MongoDB connected');
@@ -101,8 +91,6 @@ app.use((err, req, res, next) => {
     return res.status(400).json({
       status: 'error',
       message: errorDetails.body[0],
-      // message: 'Validation failed',
-      // details: errorDetails,
     });
   }
 
