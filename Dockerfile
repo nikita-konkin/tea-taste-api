@@ -20,6 +20,7 @@ RUN npm install --frozen-lockfile
 
 # Copy the full source code
 COPY . ./
+COPY .env /app/.env
 
 # Expose port for the development server
 EXPOSE 3001

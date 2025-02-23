@@ -1,13 +1,17 @@
-version: "3"
 services:
-  app:
+  tea-backend:
+    # image: nikitaikonkin/tea-taste-api
+    container_name: tea-backend
     build: .
-    ports:
-      - "3001:3001"
-    # volumes:
-    #   - .:/app
-    #   - /app/node_modules
-    # env_file:
-    #   - .env
-  # volumes:
-  #   - /etc/letsencrypt:/etc/letsencrypt
+    # ports:
+    #   - 3001:3001
+    env_file:
+      - .env
+    volumes:
+      - ./.env:/app/.env
+    networks:
+      - mynetwork
+
+networks:
+  mynetwork:
+    external: true

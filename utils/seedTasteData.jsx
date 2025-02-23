@@ -87,7 +87,7 @@ const tasteDescriptors = {
 
 
 // Подключаемся к MongoDB
-mongoose.connect('mongodb://localhost:27017/teadb', {
+mongoose.connect('mongodb://tea-mongodb:27017/teadb', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })

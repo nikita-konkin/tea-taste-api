@@ -2,105 +2,70 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 
-const {
-  NODE_ENV,
-  JWT_SECRET,
-} = process.env;
+const { NODE_ENV, JWT_SECRET } = process.env;
 
 module.exports.loginUser = (req, res, next) => {
-  const {
-    email,
-    password,
-  } = req.body;
+  const { email, password } = req.body;
 
-  User.findOne({
-    email,
-  }).select('+password')
+  User.findOne({ email }).select('+password')
     .then((user) => {
-      if (!user) {
-        return Promise.reject(new Error('Неправильные почта или пароль'));
-      }
+      if (!user) throw new Error('Неправильные почта или пароль');
 
-      req.user = user;
-
-      return bcrypt.compare(password, user.password);
+      return bcrypt.compare(password, user.password).then((matched) => ({ matched, user }));
     })
-    .then((matched) => {
-      if (!matched) {
-        return Promise.reject(new Error('Неправильные почта или пароль'));
-      }
-      const token = jwt.sign({
-        _id: req.user._id,
-      }, NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret');
+    .then(({ matched, user }) => {
+      if (!matched) throw new Error('Неправильные почта или пароль');
+
+      const token = jwt.sign(
+        { _id: user._id },
+        NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret'
+      );
+
       res.cookie('jwt', token, {
         maxAge: 9000000,
         httpOnly: true,
-        // secure: true,
-        // domain: 'nomoredomains.xyz',
-        // sameSite: 'None'
-      })
-        // .end('{}');
-      res.status(200).json({ ok: true, message: 'Login successful', token })
-      // .end('{}');
+        secure: true,
+        // secure: NODE_ENV === 'production',
+        domain: '.teaform.ru',
+        // sameSite: 'None',
+      });
 
-      // return '';
+      res.status(200).json({ ok: true, message: 'Login successful', token });
     })
     .catch((err) => {
-      console.log(err)
-      const e = new Error(err.message);
-      e.statusCode = 401;
-
-      next(e);
+      console.error(err);
+      next({ message: err.message, statusCode: 401 });
     });
 };
 
 module.exports.createUser = (req, res, next) => {
-  console.log(req.body)
-  const {
-    name,
-    email,
-    password,
-  } = req.body;
+  const { name, email, password } = req.body;
 
   bcrypt.hash(password, 10)
-    .then((hash) => User.create({
-      name,
-      email,
-      password: hash,
-    }))
-    .then(() => res.send({
-      data: {
-        name,
-        email,
-      },
-    }))
+    .then((hash) => User.create({ name, email, password: hash }))
+    .then(() => res.send({ data: { name, email } }))
     .catch((err) => {
-      // console.log('err.name')
-      // console.log(err)
       if (err.name === 'ValidationError') {
-        const e = new Error('Переданы некорректные данные при создании карточки.');
-        e.statusCode = 400;
-        next(e);
+        return next({ message: 'Переданы некорректные данные при создании карточки.', statusCode: 400 });
       } else if (err.code === 11000) {
-        const e = new Error('Пользователь уже зарегистрирован по данному email.');
-        e.statusCode = 409;
-        next(e);
+        return next({ message: 'Пользователь уже зарегистрирован по данному email.', statusCode: 409 });
       } else {
-        const e = new Error('Ошибка по умолчанию.');
-        e.statusCode = 500;
-        next(e);
+        return next({ message: 'Ошибка по умолчанию.', statusCode: 500 });
       }
-      next(err);
     });
 };
 
 module.exports.logoutUser = (req, res, next) => {
   try {
-    res.clearCookie('jwt')
+    res.clearCookie('jwt', {
+      httpOnly: true,
+      secure: true,
+      domain: 'teaform.ru',
+      // sameSite: 'None',
+    });
+
     res.status(200).json({ ok: true, message: 'LogOut successful' });
   } catch (err) {
-    const e = new Error('401 - Необходима авторизация.');
-    e.statusCode = 401;
-    next(e);
+    next({ message: '401 - Необходима авторизация.', statusCode: 401 });
   }
 };
