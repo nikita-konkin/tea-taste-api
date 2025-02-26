@@ -1,7 +1,7 @@
 require('dotenv').config();
 const createError = require('http-errors');
-// const https = require("https");
-// const fs = require("fs");
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const express = require('express');
 const path = require('path');
 const logger = require('morgan');
@@ -30,8 +30,15 @@ const port = process.env.API_PORT || 3001;
 const mdbAddr = process.env.API_MONGO_URI || "mongodb://localhost:27017";
 const allowedCors = process.env.ALLOWED_CORS ? process.env.ALLOWED_CORS.split(',') : [];
 const allowedMethods = process.env.DEFAULT_ALLOWED_METHODS || "GET,HEAD,PUT,PATCH,POST,DELETE";
+const limiter = rateLimit({
+  windowMs: 1000, // 1 sec
+  max: 200, // Limit each IP to 30 requests per windowMs
+  message: 'Слишком много запросов с этого IP-адреса. Повторите попытку позже.',
+});
 
 // Middleware
+app.use(helmet());
+app.use(limiter);
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

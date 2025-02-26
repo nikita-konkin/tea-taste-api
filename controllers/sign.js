@@ -22,7 +22,7 @@ module.exports.loginUser = (req, res, next) => {
       );
 
       res.cookie('jwt', token, {
-        maxAge: 9000000,
+        maxAge: 180 * 24 * 60 * 60 * 1000,
         httpOnly: true,
         secure: true,
         // secure: NODE_ENV === 'production',
