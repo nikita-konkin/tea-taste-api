@@ -8,15 +8,27 @@ const userSchema = new mongoose.Schema(
       minlength: 2,
       maxlength: 60,
     },
-    type: {
+    country: {
+      type: String,
+      required: false,
+      minlength: 2,
+      maxlength: 60,
+    },
+    shop: {
       type: String,
       required: true,
-      minlength: 2,
+      minlength: 1,
       maxlength: 60,
     },
     weight: {
       type: Number,
       required: true,
+    },
+    type: {
+      type: String,
+      required: true,
+      minlength: 1,
+      maxlength: 60,
     },
     water: {
       type: String,
@@ -36,33 +48,29 @@ const userSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    teaware: {
-      type: String,
-      required: true,
-      minlength: 2,
-      maxlength: 60,
-    },
     brewingtype: {
       type: String,
       required: true,
       minlength: 2,
       maxlength: 60,
     },
-    // brewings: {
-    //   type: [
-    //     {
-    //       type: mongoose.Schema.Types.ObjectId,
-    //       ref: "brewings",
-    //       default: [],
-    //     },
-    //   ],
-    // },
-    country: {
+    teaware: {
       type: String,
-      required: false,
+      required: true,
       minlength: 2,
       maxlength: 60,
     },
+    publicAccess: {
+      type: Boolean,
+      required: true,
+    },
+    averageRating: {
+      type: Number,
+      required: false,
+      min: 0,
+      max: 10,
+    },
+
     owner: {
       type: [
         {

@@ -18,6 +18,8 @@ router.post(
   celebrate({
     body: Joi.object().keys({
       nameRU: Joi.string().min(2).max(60).required(),
+      country: Joi.string().min(2).max(60).required(),
+      shop: Joi.string().min(2).max(60).required(),
       type: Joi.string().min(2).max(60).required(),
       weight: Joi.number().integer().required(),
       water: Joi.string().min(2).max(60).required(),
@@ -26,7 +28,8 @@ router.post(
       price: Joi.number().precision(4).required(),
       teaware: Joi.string().min(2).max(60).required(),
       brewingtype: Joi.string().min(2).max(60).required(),
-      country: Joi.string().min(2).max(60).required(),
+      publicAccess: Joi.boolean().required(),
+      averageRating: Joi.number().min(1).max(10).precision(2).required(),
     }),
     params: Joi.object().keys({
       sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
@@ -38,15 +41,64 @@ router.patch("/create-form/:sessionId",
   celebrate({
     body: Joi.object().keys({
       nameRU: Joi.string().min(2).max(60).required(),
+      country: Joi.string().min(2).max(60).required(),
+      shop: Joi.string().min(2).max(60).required(),
       type: Joi.string().min(2).max(60).required(),
       weight: Joi.number().integer().required(),
       water: Joi.string().min(2).max(60).required(),
       volume: Joi.number().integer().required(),
       temperature: Joi.number().integer().required(),
-      price: Joi.number().integer().required(),
+      price: Joi.number().precision(4).required(),
       teaware: Joi.string().min(2).max(60).required(),
       brewingtype: Joi.string().min(2).max(60).required(),
+      publicAccess: Joi.boolean().required(),
+      averageRating: Joi.number().min(1).max(10).precision(2).required(),
+    }),
+    params: Joi.object().keys({
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
+    }),
+  }),
+  createTeaForm
+);
+router.patch("/create-form/:sessionId",
+  celebrate({
+    body: Joi.object().keys({
+      nameRU: Joi.string().min(2).max(60).required(),
       country: Joi.string().min(2).max(60).required(),
+      shop: Joi.string().min(2).max(60).required(),
+      type: Joi.string().min(2).max(60).required(),
+      weight: Joi.number().integer().required(),
+      water: Joi.string().min(2).max(60).required(),
+      volume: Joi.number().integer().required(),
+      temperature: Joi.number().integer().required(),
+      price: Joi.number().precision(4).required(),
+      teaware: Joi.string().min(2).max(60).required(),
+      brewingtype: Joi.string().min(2).max(60).required(),
+      publicAccess: Joi.boolean().required(),
+      averageRating: Joi.number().min(1).max(10).precision(2).required(),
+    }),
+    params: Joi.object().keys({
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
+    }),
+  }),
+  createTeaForm
+);
+router.patch("/create-form/:sessionId",
+  celebrate({
+    body: Joi.object().keys({
+      nameRU: Joi.string().min(2).max(60).required(),
+      country: Joi.string().min(2).max(60).required(),
+      shop: Joi.string().min(2).max(60).required(),
+      type: Joi.string().min(2).max(60).required(),
+      weight: Joi.number().integer().required(),
+      water: Joi.string().min(2).max(60).required(),
+      volume: Joi.number().integer().required(),
+      temperature: Joi.number().integer().required(),
+      price: Joi.number().precision(4).required(),
+      teaware: Joi.string().min(2).max(60).required(),
+      brewingtype: Joi.string().min(2).max(60).required(),
+      publicAccess: Joi.boolean().required(),
+      averageRating: Joi.number().min(1).max(10).precision(4).required(),
     }),
     params: Joi.object().keys({
       sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),

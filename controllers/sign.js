@@ -23,10 +23,9 @@ module.exports.loginUser = (req, res, next) => {
 
       res.cookie('jwt', token, {
         maxAge: 180 * 24 * 60 * 60 * 1000,
-        httpOnly: true,
-        secure: true,
-        // secure: NODE_ENV === 'production',
-        domain: '.teaform.ru',
+        httpOnly: NODE_ENV == 'production' ? true : false,
+        secure: NODE_ENV === 'production',
+        domain: NODE_ENV == 'production' ? '.teaform.ru' : '',
         // sameSite: 'None',
       });
 

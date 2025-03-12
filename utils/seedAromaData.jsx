@@ -49,7 +49,7 @@ const aromaDescriptors = {
 };
 
 // Подключаемся к MongoDB
-mongoose.connect('mongodb://tea-mongodb:27017/teadb', {
+mongoose.connect('mongodb://192.168.50.117:27017/teadb', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })

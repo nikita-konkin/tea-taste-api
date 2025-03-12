@@ -26,7 +26,7 @@ const app = express();
 // };
 
 // Environment Variables
-const port = process.env.API_PORT || 3001;
+const port = process.env.PORT || 3001;
 const mdbAddr = process.env.API_MONGO_URI || "mongodb://localhost:27017";
 const allowedCors = process.env.ALLOWED_CORS ? process.env.ALLOWED_CORS.split(',') : [];
 const allowedMethods = process.env.DEFAULT_ALLOWED_METHODS || "GET,HEAD,PUT,PATCH,POST,DELETE";
@@ -114,6 +114,7 @@ app.use((err, req, res, next) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
   console.log('running type:', process.env.NODE_ENV, process.env.NODE_ENV === 'production');
+  console.log(`Allowed CORS: ${allowedCors}`);
 });
 
 // console.error("Starting HTTPS server...");

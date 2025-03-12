@@ -8,6 +8,9 @@ const {
 module.exports = (req, res, next) => {
   const authorization = req.cookies.jwt;
 
+  // console.log('Token:', authorization);
+  // console.log('Token:', jwt.verify(authorization, NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret'));
+  
   if (!authorization) {
     const e = new Error('Необходима авторизация.');
     e.statusCode = 401;
@@ -17,7 +20,6 @@ module.exports = (req, res, next) => {
   const token = authorization;
 
   let payload;
-
   try {
     payload = jwt.verify(token, NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret');
   } catch (err) {

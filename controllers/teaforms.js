@@ -5,6 +5,8 @@ const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId")
 module.exports.createTeaForm = (req, res, next) => {
   const {
     nameRU,
+    country,
+    shop,
     type,
     weight,
     water,
@@ -13,7 +15,8 @@ module.exports.createTeaForm = (req, res, next) => {
     price,
     teaware,
     brewingtype,
-    country,
+    publicAccess,
+    averageRating
   } = req.body;
   // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
 
@@ -29,6 +32,8 @@ module.exports.createTeaForm = (req, res, next) => {
     {
       $setOnInsert: {
         nameRU: nameRU,
+        country: country,
+        shop: shop,
         type: type,
         weight: weight,
         water: water,
@@ -37,9 +42,10 @@ module.exports.createTeaForm = (req, res, next) => {
         price: price,
         teaware: teaware,
         brewingtype: brewingtype,
-        country: country,
+        publicAccess: publicAccess,
         sessionId: sessionId,
         owner: owner,
+        averageRating: averageRating
       },
     },
     { upsert: true }
@@ -89,6 +95,8 @@ module.exports.patchTeaForm = (req, res, next) => {
 
   const {
     nameRU,
+    country,
+    shop,
     type,
     weight,
     water,
@@ -97,7 +105,8 @@ module.exports.patchTeaForm = (req, res, next) => {
     price,
     teaware,
     brewingtype,
-    country,
+    publicAccess,
+    averageRating
   } = req.body;
   // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
 
@@ -111,6 +120,8 @@ module.exports.patchTeaForm = (req, res, next) => {
     },
     {
       nameRU: nameRU,
+      country: country,
+      shop: shop,
       type: type,
       weight: weight,
       water: water,
@@ -119,7 +130,9 @@ module.exports.patchTeaForm = (req, res, next) => {
       price: price,
       teaware: teaware,
       brewingtype: brewingtype,
-      country: country,
+      publicAccess: publicAccess,
+      averageRating: averageRating
+      // $set: {
       // sessionId: sessionId,
       // owner: owner,
     },
