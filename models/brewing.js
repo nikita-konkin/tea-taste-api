@@ -1,24 +1,7 @@
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
-  // aromas: {
-  //   type: [
-  //     {
-  //       type: mongoose.Schema.Types.ObjectId,
-  //       ref: "aromas",
-  //       default: [],
-  //     },
-  //   ],
-  // },
-  // tastes: {
-  //   type: [
-  //     {
-  //       type: mongoose.Schema.Types.ObjectId,
-  //       ref: "tastes",
-  //       default: [],
-  //     },
-  //   ],
-  // },
+
   description: {
     type: String,
     required: true,
@@ -41,6 +24,10 @@ const userSchema = new mongoose.Schema({
         default: [],
       },
     ],
+  },
+  publicAccess: {
+    type: Boolean,
+    required: true,
   },
   sessionId: {
     type: String,

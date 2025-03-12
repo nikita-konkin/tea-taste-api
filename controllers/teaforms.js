@@ -1,6 +1,6 @@
 const TeaForm = require("../models/teaform");
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
-const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId")
+const { getTeaDataBySessionIdAndOwner } = require("../utils/getTeaDataBy")
 
 module.exports.createTeaForm = (req, res, next) => {
   const {
@@ -72,7 +72,7 @@ module.exports.createTeaForm = (req, res, next) => {
 
 module.exports.getTeaFormsByID = (req, res, next) => {
 
-  getTeaDataBySessionId(req, res, next, TeaForm)
+  getTeaDataBySessionIdAndOwner(req, res, next, TeaForm)
 
 };
 
@@ -90,6 +90,20 @@ module.exports.getTeaForms = (req, res, next) => {
       next(e);
     });
 };
+
+module.exports.getPublicTeaForms = (req, res, next) => {
+  TeaForm.find({ publicAccess: true })
+    .then((forms) =>
+      res.send({
+        data: forms,
+      })
+    )
+    .catch((err) => {
+      const e = new Error(err.message);
+      e.statusCode = 500;
+      next(e);
+    });
+}
 
 module.exports.patchTeaForm = (req, res, next) => {
 

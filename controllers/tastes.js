@@ -1,10 +1,12 @@
 const Taste = require("../models/taste");
 const TasteDB = require('../models/tasteDB');
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
-const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId");
+const { getTeaDataBySessionIdAndOwner,
+  getTeaDataBySessionIdAndPublicAccess
+ } = require("../utils/getTeaDataBy");
 
 module.exports.createTaste = (req, res, next) => {
-  const { tasteStage1, tasteStage2, tasteStage3 } = req.body;
+  const { tasteStage1, tasteStage2, tasteStage3, publicAccess } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -23,6 +25,7 @@ module.exports.createTaste = (req, res, next) => {
         tasteCount: tasteCount,
         brewingCount: brewingCount,
         owner: owner,
+        publicAccess: publicAccess,
       },
     },
     { upsert: true }
@@ -48,8 +51,7 @@ module.exports.createTaste = (req, res, next) => {
 };
 
 module.exports.patchTaste = (req, res, next) => {
-  const { tasteStage1, tasteStage2,  tasteStage3} = req.body;
-  // const { tasteStage2 } = req.body;
+  const { tasteStage1, tasteStage2,  tasteStage3, publicAccess} = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -67,6 +69,7 @@ module.exports.patchTaste = (req, res, next) => {
       tasteCount: tasteCount,
       brewingCount: brewingCount,
       owner: owner,
+      publicAccess: publicAccess,
     }},
     {new : true, runValidators: true }
   )
@@ -91,10 +94,12 @@ module.exports.patchTaste = (req, res, next) => {
 };
 
 module.exports.getTastes = (req, res, next) => {
-
-  getTeaDataBySessionId(req, res, next, Taste)
-
+  getTeaDataBySessionIdAndOwner(req, res, next, Taste)
 }
+
+module.exports.getPublicTastes = (req, res, next) => {
+  getTeaDataBySessionIdAndPublicAccess(req, res, next, Taste);
+};
 
 module.exports.delTasteBySessionID = (req, res, next) => {
 

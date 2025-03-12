@@ -1,4 +1,5 @@
-const router = require("express").Router();
+const privateRouter = require("express").Router();
+const publicRouter = require("express").Router();
 
 const { celebrate, Joi } = require("celebrate");
 
@@ -8,16 +9,18 @@ const {
   getTastes,
   patchTaste,
   delTasteSelective,
-  getAllFromTasteDB
+  getAllFromTasteDB,
+  getPublicTastes,
    } = require("../controllers/tastes");
 
-router.post(
+privateRouter.post(
   "/my-tastes/:sessionId/brew/:brewId/taste/:tasteId",
   celebrate({
     body: Joi.object().keys({
       tasteStage1: Joi.string().min(2).max(30).required(),
       tasteStage2: Joi.string().min(0).max(30),
       tasteStage3: Joi.string().min(0).max(30),
+      publicAccess: Joi.boolean().required(),
     }),
     params: Joi.object().keys({
       sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
@@ -27,13 +30,14 @@ router.post(
   }),
   createTaste
 );
-router.patch(
+privateRouter.patch(
   "/my-tastes/:sessionId/brew/:brewId/taste/:tasteId",
   celebrate({
     body: Joi.object().keys({
       tasteStage1: Joi.string().min(2).max(30),
       tasteStage2: Joi.string().min(0).max(30),
       tasteStage3: Joi.string().min(0).max(30),
+      publicAccess: Joi.boolean(),
     }),
     params: Joi.object().keys({
       sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
@@ -43,8 +47,13 @@ router.patch(
   }),
   patchTaste
 );
-router.get("/my-tastes/:sessionId", getTastes);
-router.get("/tastedb", getAllFromTasteDB);
-router.delete("/my-tastes/:sessionId", delTasteBySessionID);
-router.delete("/my-tastes/:sessionId/brew/:brewId/taste/:tasteId", delTasteSelective);
-module.exports = router;
+privateRouter.get("/my-tastes/:sessionId", getTastes);
+privateRouter.get("/tastedb", getAllFromTasteDB);
+privateRouter.delete("/my-tastes/:sessionId", delTasteBySessionID);
+privateRouter.delete("/my-tastes/:sessionId/brew/:brewId/taste/:tasteId", delTasteSelective);
+
+publicRouter.get("/public-tastes/:sessionId", getPublicTastes);
+
+
+module.exports.publicRouter = publicRouter;
+module.exports.privateRouter = privateRouter;

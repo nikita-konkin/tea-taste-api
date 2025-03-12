@@ -12,27 +12,13 @@ const auth = require('./middlewares/auth');
 
 const app = express();
 
-// Check for SSL Certificates
-// const keyPath = "key.pem";
-// const certPath = "cert.pem";
-// if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-//   console.error("SSL key or cert not found! Exiting...");
-//   process.exit(1);
-// }
-
-// const options = {
-//   key: fs.readFileSync(keyPath),
-//   cert: fs.readFileSync(certPath),
-// };
-
-// Environment Variables
 const port = process.env.PORT || 3001;
 const mdbAddr = process.env.API_MONGO_URI || "mongodb://localhost:27017";
 const allowedCors = process.env.ALLOWED_CORS ? process.env.ALLOWED_CORS.split(',') : [];
 const allowedMethods = process.env.DEFAULT_ALLOWED_METHODS || "GET,HEAD,PUT,PATCH,POST,DELETE";
 const limiter = rateLimit({
-  windowMs: 1000, // 1 sec
-  max: 200, // Limit each IP to 30 requests per windowMs
+  windowMs: 1000,
+  max: 200,
   message: 'Слишком много запросов с этого IP-адреса. Повторите попытку позже.',
 });
 
@@ -76,12 +62,16 @@ mongoose.connect(mdbAddr, {
 
 // Routes
 app.use(require('./routes/signs'));
+app.use(require('./routes/teaforms').publicRouter);
+app.use(require('./routes/aromas').publicRouter);
+app.use(require('./routes/tastes').publicRouter);
+app.use(require('./routes/brewings').publicRouter);
 app.use(auth);
 app.use(require('./routes/users'));
-app.use(require('./routes/aromas'));
-app.use(require('./routes/tastes'));
-app.use(require('./routes/brewings'));
-app.use(require('./routes/teaforms'));
+app.use(require('./routes/aromas').privateRouter);
+app.use(require('./routes/tastes').privateRouter);
+app.use(require('./routes/brewings').privateRouter);
+app.use(require('./routes/teaforms').privateRouter);
 
 // Error Handling
 app.use((req, res, next) => {
@@ -116,17 +106,5 @@ app.listen(port, '0.0.0.0', () => {
   console.log('running type:', process.env.NODE_ENV, process.env.NODE_ENV === 'production');
   console.log(`Allowed CORS: ${allowedCors}`);
 });
-
-// console.error("Starting HTTPS server...");
-
-// const server = https.createServer(options, app);
-// server.listen(port, () => {
-//   console.error(`Secure server running on https://192.168.50.117:${port}`);
-// });
-
-// // Log error if the server fails
-// server.on("error", (err) => {
-//   console.error("Failed to start server:", err);
-// });
 
 module.exports = app;

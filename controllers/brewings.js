@@ -1,11 +1,12 @@
 const Brewing = require("../models/brewing");
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
-const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId")
+const { getTeaDataBySessionIdAndOwner, 
+  getTeaDataBySessionIdAndPublicAccess
+ } = require("../utils/getTeaDataBy")
 
 
 module.exports.createBrew = (req, res, next) => {
-  const { description, brewingRating, brewingTime } = req.body;
-  // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
+  const { description, brewingRating, brewingTime, publicAccess } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -23,6 +24,7 @@ module.exports.createBrew = (req, res, next) => {
         sessionId: sessionId,
         brewingCount: brewingCount,
         owner: owner,
+        publicAccess: publicAccess,
       },
     },
     { upsert: true }
@@ -48,8 +50,7 @@ module.exports.createBrew = (req, res, next) => {
 };
 
 module.exports.patchBrew = (req, res, next) => {
-  const { description, brewingRating, brewingTime } = req.body;
-  // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
+  const { description, brewingRating, brewingTime, publicAccess } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -64,6 +65,7 @@ module.exports.patchBrew = (req, res, next) => {
       sessionId: sessionId,
       brewingCount: brewingCount,
       owner: owner,
+      publicAccess: publicAccess,
     },
     { new: true }
   )
@@ -88,9 +90,11 @@ module.exports.patchBrew = (req, res, next) => {
 };
 
 module.exports.getBrews = (req, res, next) => {
+  getTeaDataBySessionIdAndOwner(req, res, next, Brewing)
+};
 
-  getTeaDataBySessionId(req, res, next, Brewing)
-
+module.exports.getPublicBrews = (req, res, next) => {
+  getTeaDataBySessionIdAndPublicAccess(req, res, next, Brewing)
 };
 
 module.exports.delBrewsBySessionID = (req, res, next) => {

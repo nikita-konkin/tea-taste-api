@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema({
       },
     ],
   },
+  publicAccess: {
+    type: Boolean,
+    required: true,
+  },
   sessionId: {
     type: String,
     required: true,

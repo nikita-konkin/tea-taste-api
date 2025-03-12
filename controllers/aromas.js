@@ -2,10 +2,12 @@ const Aroma = require("../models/aroma");
 const AromaDB = require('../models/aromaDB');
 
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
-const { getTeaDataBySessionId } = require("../utils/getTeaDataBySessionId")
+const { getTeaDataBySessionIdAndOwner,
+  getTeaDataBySessionIdAndPublicAccess
+ } = require("../utils/getTeaDataBy")
 
 module.exports.createAroma = (req, res, next) => {
-  const { aromaStage1, aromaStage2, aromaStage3 } = req.body;
+  const { aromaStage1, aromaStage2, aromaStage3, publicAccess } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -25,6 +27,7 @@ module.exports.createAroma = (req, res, next) => {
         aromaCount: aromaCount,
         brewingCount: brewingCount,
         owner: owner,
+        publicAccess: publicAccess,
       },
     },
     { upsert: true }
@@ -50,7 +53,7 @@ module.exports.createAroma = (req, res, next) => {
 };
 
 module.exports.patchAroma = (req, res, next) => {
-  const { aromaStage1, aromaStage2, aromaStage3 } = req.body;
+  const { aromaStage1, aromaStage2, aromaStage3, publicAccess } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -68,7 +71,9 @@ module.exports.patchAroma = (req, res, next) => {
       sessionId: sessionId,
       aromaCount: aromaCount,
       brewingCount: brewingCount,
-      owner: owner,}
+      owner: owner,
+      publicAccess: publicAccess,
+    }
     },
     {new : true, runValidators: true}
   )
@@ -93,11 +98,12 @@ module.exports.patchAroma = (req, res, next) => {
 }
 
 module.exports.getAromas = (req, res, next) => {
-
-  getTeaDataBySessionId(req, res, next, Aroma)
-
+  getTeaDataBySessionIdAndOwner(req, res, next, Aroma)
 }
 
+module.exports.getPublicAromas = (req, res, next) => {
+  getTeaDataBySessionIdAndPublicAccess(req, res, next, Aroma)
+}
 
 module.exports.delAromaBySessionID = (req, res, next) => {
   

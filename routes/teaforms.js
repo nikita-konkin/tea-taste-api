@@ -1,6 +1,11 @@
-const router = require("express").Router();
+const express = require('express');
+const { celebrate, Joi } = require('celebrate');
+const { getPublicTeaForms } = require('../controllers/teaforms');
 
-const { celebrate, Joi } = require("celebrate");
+const publicRouter = express.Router();
+publicRouter.get('/public-forms', getPublicTeaForms);
+
+const privateRouter = express.Router();
 
 const {
   createTeaForm,
@@ -10,10 +15,10 @@ const {
   patchTeaForm,
 } = require("../controllers/teaforms");
 
-router.get("/my-forms", getTeaForms);
-router.get("/my-form/:sessionId", getTeaFormsByID);
-router.delete("/my-form/:sessionId", delTeaFormBySessionID);
-router.post(
+privateRouter.get("/my-forms", getTeaForms);
+privateRouter.get("/my-form/:sessionId", getTeaFormsByID);
+privateRouter.delete("/my-form/:sessionId", delTeaFormBySessionID);
+privateRouter.post(
   "/create-form/:sessionId",
   celebrate({
     body: Joi.object().keys({
@@ -37,7 +42,7 @@ router.post(
   }),
   createTeaForm
 );
-router.patch("/create-form/:sessionId",
+privateRouter.patch("/create-form/:sessionId",
   celebrate({
     body: Joi.object().keys({
       nameRU: Joi.string().min(2).max(60).required(),
@@ -60,7 +65,7 @@ router.patch("/create-form/:sessionId",
   }),
   createTeaForm
 );
-router.patch("/create-form/:sessionId",
+privateRouter.patch("/create-form/:sessionId",
   celebrate({
     body: Joi.object().keys({
       nameRU: Joi.string().min(2).max(60).required(),
@@ -83,7 +88,7 @@ router.patch("/create-form/:sessionId",
   }),
   createTeaForm
 );
-router.patch("/create-form/:sessionId",
+privateRouter.patch("/create-form/:sessionId",
   celebrate({
     body: Joi.object().keys({
       nameRU: Joi.string().min(2).max(60).required(),
@@ -107,4 +112,5 @@ router.patch("/create-form/:sessionId",
   patchTeaForm
   )
 
-module.exports = router;
+module.exports.publicRouter = publicRouter;
+module.exports.privateRouter = privateRouter;
