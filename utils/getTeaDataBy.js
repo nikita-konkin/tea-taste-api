@@ -1,4 +1,4 @@
-module.exports.getTeaDataBySessionIdAndOwnerAndOwner = (req, res, nex, schema) => {
+module.exports.getTeaDataBySessionIdAndOwner = (req, res, nex, schema) => {
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
 
