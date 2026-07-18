@@ -100,6 +100,19 @@ describe('access control', () => {
     expect(res.body.data.some((f) => f.sessionId === SID)).toBe(true);
   });
 
+  test('GET /public-forms exposes the author name/avatar but not the email', async () => {
+    await request(app)
+      .patch('/profile/me')
+      .set('Cookie', cookieA)
+      .send({ avatar: 'https://example.com/owner.png' });
+
+    const res = await request(app).get('/public-forms');
+    const form = res.body.data.find((f) => f.sessionId === SID);
+    expect(form.owner[0].name).toBe('Хозяин');
+    expect(form.owner[0].avatar).toBe('https://example.com/owner.png');
+    expect(form.owner[0].email).toBeUndefined();
+  });
+
   test('DELETE /my-form of another user -> 404, form survives', async () => {
     const res = await request(app).delete(`/my-form/${SID}`).set('Cookie', cookieB);
     expect(res.status).toBe(404);

@@ -93,6 +93,7 @@ module.exports.getTeaForms = (req, res, next) => {
 
 module.exports.getPublicTeaForms = (req, res, next) => {
   TeaForm.find({ publicAccess: true })
+    .populate('owner', 'name avatar')
     .then((forms) =>
       res.send({
         data: forms,
