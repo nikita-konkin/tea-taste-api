@@ -13,7 +13,7 @@ module.exports.createBrew = (req, res, next) => {
   const brewingCount = req.params.brewId;
 
   Brewing.updateMany(
-    { sessionId: sessionId, brewingCount: brewingCount },
+    { sessionId: sessionId, brewingCount: brewingCount, owner: owner },
     {
       $setOnInsert: {
         // aromas: aromas,
@@ -40,11 +40,11 @@ module.exports.createBrew = (req, res, next) => {
           "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
-        next(err);
+        next(e);
       } else {
         const e = new Error("500 — Ошибка по умолчанию.");
         e.statusCode = 500;
-        next(err);
+        next(e);
       }
     });
 };
@@ -57,7 +57,7 @@ module.exports.patchBrew = (req, res, next) => {
   const brewingCount = req.params.brewId;
 
   Brewing.findOneAndUpdate(
-    { sessionId: sessionId, brewingCount: brewingCount },
+    { sessionId: sessionId, brewingCount: brewingCount, owner: owner },
     {
       description: description,
       brewingRating: brewingRating,
@@ -80,11 +80,11 @@ module.exports.patchBrew = (req, res, next) => {
           "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
-        next(err);
+        next(e);
       } else {
         const e = new Error("500 — Ошибка по умолчанию.");
         e.statusCode = 500;
-        next(err);
+        next(e);
       }
     });
 };

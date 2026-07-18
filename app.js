@@ -17,24 +17,49 @@ const mdbAddr = process.env.API_MONGO_URI || 'mongodb://localhost:27017';
 const allowedCors = process.env.ALLOWED_CORS ? process.env.ALLOWED_CORS.split(',') : [];
 const allowedMethods = process.env.DEFAULT_ALLOWED_METHODS || 'GET,HEAD,PUT,PATCH,POST,DELETE';
 
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('JWT_SECRET is required in production. Exiting.');
+  process.exit(1);
+}
+
+// The app runs behind a reverse proxy (nginx): take the client IP from
+// X-Forwarded-For so the rate limiter counts per client, not per proxy.
+app.set('trust proxy', 1);
+
 const limiter = rateLimit({
-  windowMs: 1000,
-  max: 200,
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: 'Слишком много запросов с этого IP-адреса. Повторите попытку позже.',
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Слишком много попыток входа. Повторите попытку позже.',
 });
 
 // Middleware
 app.use(helmet());
 app.use(limiter);
+app.use(['/sign-in', '/sign-up'], authLimiter);
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Simple health endpoint
+// Health endpoint: reports DB connectivity so orchestration can detect
+// a dead Mongo connection (readyState 1 = connected).
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+  const dbConnected = mongoose.connection.readyState === 1;
+  res.status(dbConnected ? 200 : 503).json({
+    status: dbConnected ? 'ok' : 'degraded',
+    db: dbConnected ? 'connected' : 'disconnected',
+  });
 });
 
 // CORS
@@ -105,6 +130,13 @@ app.use((err, req, res, next) => {
 
 let server;
 
+mongoose.connection.on('disconnected', () => console.warn('MongoDB disconnected'));
+mongoose.connection.on('reconnected', () => console.log('MongoDB reconnected'));
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+});
+
 async function start() {
   try {
     await mongoose.connect(mdbAddr);
@@ -145,6 +177,10 @@ async function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-start();
+// Only start the server when run directly (node app.js), not when the app
+// is imported (e.g. by supertest in tests).
+if (require.main === module) {
+  start();
+}
 
 module.exports = app;

@@ -6,18 +6,13 @@ const {
 } = process.env;
 
 module.exports = (req, res, next) => {
-  const authorization = req.cookies.jwt;
+  const token = req.cookies.jwt;
 
-  // console.log('Token:', authorization);
-  // console.log('Token:', jwt.verify(authorization, NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret'));
-  
-  if (!authorization) {
+  if (!token) {
     const e = new Error('Необходима авторизация.');
     e.statusCode = 401;
-    next(e);
+    return next(e);
   }
-
-  const token = authorization;
 
   let payload;
   try {
@@ -25,10 +20,10 @@ module.exports = (req, res, next) => {
   } catch (err) {
     const e = new Error('Необходима авторизация.');
     e.statusCode = 401;
-    next(e);
+    return next(e);
   }
 
   req.user = payload;
 
-  next();
+  return next();
 };

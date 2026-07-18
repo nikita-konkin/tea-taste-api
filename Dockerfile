@@ -1,38 +1,14 @@
-# Stage 1: Build the React app
-# FROM node:18-alpine AS build
-# WORKDIR /server
-
-# Leverage caching by installing dependencies first
-# COPY package.json package-lock.json ./
-# RUN npm install --frozen-lockfile
-
-# Copy the rest of the application code and build for production
-# COPY . ./
-# RUN npm run build
-
-# Stage 2: Development environment
-FROM node:18-alpine AS development
+FROM node:18-alpine
 WORKDIR /app
 
-# Install dependencies again for development
+# Install dependencies first to leverage layer caching
 COPY package.json package-lock.json ./
-RUN npm install --frozen-lockfile
+RUN npm ci --omit=dev
 
-# Copy the full source code
+# Copy the application code.
+# Note: .env is NOT copied into the image — provide configuration via
+# docker-compose env_file / environment (or a mounted .env volume).
 COPY . ./
-COPY .env /app/.env
 
-# Expose port for the development server
 EXPOSE 3001
-# CMD ["npm", "start"]
-CMD ["node", "./bin/www"]
-
-# Stage 3: Production environment
-# FROM nginx:alpine AS production
-
-# Copy the production build artifacts from the build stage
-# COPY --from=build /app/build /usr/share/nginx/html
-
-# Expose the default NGINX port
-# EXPOSE 80
-# CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "app.js"]

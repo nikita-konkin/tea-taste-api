@@ -15,7 +15,7 @@ module.exports.createTaste = (req, res, next) => {
 
   Taste.updateMany(
     { tasteCount: tasteCount, brewingCount: brewingCount,
-      sessionId: sessionId, brewingCount: brewingCount },
+      sessionId: sessionId, owner: owner },
     {
       $setOnInsert: {
         tasteStage1: tasteStage1,
@@ -41,7 +41,7 @@ module.exports.createTaste = (req, res, next) => {
           "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
-        next(err);
+        next(e);
       } else {
         const e = new Error("500 — Ошибка по умолчанию.");
         e.statusCode = 500;
@@ -60,7 +60,7 @@ module.exports.patchTaste = (req, res, next) => {
 
   Taste.findOneAndUpdate(
     { tasteCount: tasteCount, brewingCount: brewingCount,
-      sessionId: sessionId, brewingCount: brewingCount },
+      sessionId: sessionId, owner: owner },
     {$set : {
       tasteStage1: tasteStage1,
       tasteStage2: tasteStage2,
@@ -84,7 +84,7 @@ module.exports.patchTaste = (req, res, next) => {
           "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
-        next(err);
+        next(e);
       } else {
         const e = new Error("500 — Ошибка по умолчанию.");
         e.statusCode = 500;
@@ -155,7 +155,7 @@ module.exports.getAllFromTasteDB = (req, res, next) => {
   )
   .catch((err) => {
     const e = new Error(err.message);
-    e.statusCode - 500;
+    e.statusCode = 500;
     next(e)
   })
 

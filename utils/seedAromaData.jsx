@@ -101,7 +101,7 @@ const aromaDescriptors = {
   Овощной: ["Шпинат", "Брокколи", "Сельдерей", "Спаржа"]
 };
 // Подключаемся к MongoDB
-mongoose.connect('mongodb://192.168.50.117:27017/teadb', {
+mongoose.connect(process.env.API_MONGO_URI || 'mongodb://192.168.50.117:27017/teadb', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })

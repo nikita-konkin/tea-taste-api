@@ -16,7 +16,7 @@ module.exports.createAroma = (req, res, next) => {
 
   Aroma.updateMany(
     { aromaCount: aromaCount, brewingCount: brewingCount,
-      sessionId: sessionId, brewingCount: brewingCount 
+      sessionId: sessionId, owner: owner,
     },
     {
       $set: {
@@ -43,7 +43,7 @@ module.exports.createAroma = (req, res, next) => {
           "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
-        next(err);
+        next(e);
       } else {
         const e = new Error("500 — Ошибка по умолчанию.");
         e.statusCode = 500;
@@ -62,7 +62,7 @@ module.exports.patchAroma = (req, res, next) => {
 
   Aroma.findOneAndUpdate(
     { aromaCount: aromaCount, brewingCount: brewingCount,
-      sessionId: sessionId, brewingCount: brewingCount },
+      sessionId: sessionId, owner: owner },
     {
       $set : {
       aromaStage1: aromaStage1,
@@ -88,7 +88,7 @@ module.exports.patchAroma = (req, res, next) => {
           "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
-        next(err);
+        next(e);
       } else {
         const e = new Error("500 — Ошибка по умолчанию.");
         e.statusCode = 500;
@@ -161,7 +161,7 @@ module.exports.getAllFromAromaDB = (req, res, next) => {
   )
   .catch((err) => {
     const e = new Error(err.message);
-    e.statusCode - 500;
+    e.statusCode = 500;
     next(e)
   })
 

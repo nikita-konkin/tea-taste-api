@@ -5,7 +5,7 @@ module.exports.getUserById = (req, res, next) => {
     .orFail(() => {
       const e = new Error('404 — Запись не найдена.');
       e.statusCode = 404;
-      next(e);
+      return e;
     })
     .then((user) => {
       res.send({
@@ -13,7 +13,9 @@ module.exports.getUserById = (req, res, next) => {
       });
     })
     .catch((err) => {
-      if (err.name === 'CastError') {
+      if (err.statusCode) {
+        next(err);
+      } else if (err.name === 'CastError') {
         const e = new Error('400 - Невалидный id');
         e.statusCode = 400;
         next(e);
@@ -51,7 +53,7 @@ module.exports.updateUserProfile = (req, res, next) => {
         const e = new Error('400 - Некорректные данные');
         e.statusCode = 400;
         next(e);
-      } else if (err.code === 'DuplicateKey') {
+      } else if (err.code === 11000) {
         const e = new Error('409 — Данный пользователь уже существует');
         e.statusCode = 409;
         next(e);

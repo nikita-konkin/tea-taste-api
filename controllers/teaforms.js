@@ -61,11 +61,11 @@ module.exports.createTeaForm = (req, res, next) => {
           "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
-        next(err);
+        next(e);
       } else {
         const e = new Error("500 — Ошибка по умолчанию.");
         e.statusCode = 500;
-        next(err);
+        next(e);
       }
     });
 };
@@ -163,11 +163,11 @@ module.exports.patchTeaForm = (req, res, next) => {
           "400 — Переданы некорректные данные."
         );
         e.statusCode = 400;
-        next(err);
+        next(e);
       } else {
         const e = new Error("500 — Ошибка по умолчанию.");
         e.statusCode = 500;
-        next(err);
+        next(e);
       }
     });
 }
