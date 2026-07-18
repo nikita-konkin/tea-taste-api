@@ -41,6 +41,19 @@ docker compose up -d --build
 
 For a fully local stack (MongoDB included, no external network) use the sandbox in [`../sandbox`](../sandbox).
 
+## Tests
+
+Integration tests (jest + supertest) live in `tests/` and cover the auth flow, the auth middleware, tea-form CRUD (including the PATCH regression), per-user data isolation, brewings, and the health endpoint. They need a MongoDB to talk to — the URI comes from `API_MONGO_URI` (default `mongodb://localhost:27017/tea-taste-test`; the target database is **wiped** at the start of each suite, so never point it at real data).
+
+The easiest way to run them is through the sandbox, which provides a throwaway DB:
+
+```bash
+cd ../sandbox
+docker compose --profile test run --rm tea-tests
+```
+
+With Node installed locally: `API_MONGO_URI=mongodb://localhost:27017/tea-taste-test npm test`.
+
 ## Seeding the descriptor dictionaries
 
 `GET /aromadb` and `GET /tastedb` serve reference dictionaries used by the frontend autocomplete. Populate them once per database:
@@ -73,7 +86,8 @@ Errors: `{ "status": "error", "message": "…" }`. Health probe: `GET /health` �
 | Method & path | Description |
 |---|---|
 | `GET /profile/me` | Current user profile |
-| `PATCH /profile/me` | Update `name`, `email`, `career` |
+| `PATCH /profile/me` | Update `name`, `email`, `career`, `about`, `avatar` (URL); any subset, empty string clears an optional field |
+| `PATCH /profile/password` | Change password (`oldPassword`, `newPassword`); verifies the current password |
 | `GET /my-forms` | All of the user's tea forms |
 | `GET /my-form/:sessionId` | One session's tea form |
 | `POST /create-form/:sessionId` | Create a tea form |

@@ -9,7 +9,9 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      # 127.0.0.1, not localhost: the app listens on IPv4 only and alpine
+      # resolves localhost to ::1 first.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
       interval: 30s
       timeout: 5s
       retries: 3

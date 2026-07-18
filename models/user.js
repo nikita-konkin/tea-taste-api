@@ -27,7 +27,21 @@ const userSchema = new mongoose.Schema({
     required: false,
     minlength: 2,
     maxlength: 100,
-  }
+  },
+  about: {
+    type: String,
+    required: false,
+    minlength: 2,
+    maxlength: 500,
+  },
+  avatar: {
+    type: String,
+    required: false,
+    validate: {
+      validator: (v) => validator.isURL(v, { protocols: ['http', 'https'], require_protocol: true }),
+      message: 'Некорректная ссылка на аватар.',
+    },
+  },
 },
   { timestamps: true }
   );
