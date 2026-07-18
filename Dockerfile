@@ -24,7 +24,8 @@ COPY .env /app/.env
 
 # Expose port for the development server
 EXPOSE 3001
-CMD ["npm", "start"]
+# CMD ["npm", "start"]
+CMD ["node", "./bin/www"]
 
 # Stage 3: Production environment
 # FROM nginx:alpine AS production
