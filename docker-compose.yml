@@ -1,8 +1,10 @@
 services:
   tea-backend:
-    # image: nikitaikonkin/tea-taste-api
     container_name: tea-backend
-    build: nikita8konkin/tea-taste-api
+    # CI pushes this image; `docker compose pull && up -d` deploys it.
+    # `up -d --build` still builds from source when needed.
+    image: nikita8konkin/tea-taste-api:latest
+    build: .
     restart: unless-stopped
     # ports:
     #   - 3001:3001
