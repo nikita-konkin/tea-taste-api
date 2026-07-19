@@ -16,6 +16,8 @@ const {
   confirmPasswordReset,
 } = require('../controllers/passwordReset');
 
+const { startVkAuth, vkCallback } = require('../controllers/vkAuth');
+
 // Define the Joi schema
 
 
@@ -60,6 +62,9 @@ createUser
 );
 
 router.post('/sign-out', logoutUser);
+
+router.get('/auth/vk', startVkAuth);
+router.get('/auth/vk/callback', vkCallback);
 
 router.post('/password-reset/request', celebrate({
   [Segments.BODY]: Joi.object().keys({

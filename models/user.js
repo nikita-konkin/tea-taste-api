@@ -44,6 +44,11 @@ const userSchema = new mongoose.Schema({
       message: 'Некорректная ссылка на аватар.',
     },
   },
+  vkId: {
+    type: String,
+    unique: true,
+    sparse: true,
+  },
   passwordResetToken: {
     type: String,
     select: false,
