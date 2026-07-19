@@ -3,6 +3,7 @@ const { celebrate, Joi, Segments } = require('celebrate');
 
 const adminOnly = require('../middlewares/adminOnly');
 const { getUsers, setUserRole, deleteUser } = require('../controllers/admin');
+const { getSuggestions, deleteSuggestion } = require('../controllers/suggestions');
 
 privateRouter.use('/admin', adminOnly);
 
@@ -22,5 +23,13 @@ privateRouter.delete('/admin/users/:id', celebrate({
     id: Joi.string().hex().length(24).required(),
   }),
 }), deleteUser);
+
+privateRouter.get('/admin/suggestions', getSuggestions);
+
+privateRouter.delete('/admin/suggestions/:id', celebrate({
+  [Segments.PARAMS]: Joi.object().keys({
+    id: Joi.string().hex().length(24).required(),
+  }),
+}), deleteSuggestion);
 
 module.exports.privateRouter = privateRouter;
