@@ -38,9 +38,19 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: false,
     validate: {
-      validator: (v) => validator.isURL(v, { protocols: ['http', 'https'], require_protocol: true }),
+      // Absolute http(s) URL or a site-relative path (uploaded avatars).
+      validator: (v) => v.startsWith('/')
+        || validator.isURL(v, { protocols: ['http', 'https'], require_protocol: true }),
       message: 'Некорректная ссылка на аватар.',
     },
+  },
+  passwordResetToken: {
+    type: String,
+    select: false,
+  },
+  passwordResetExpires: {
+    type: Date,
+    select: false,
   },
 },
   { timestamps: true }

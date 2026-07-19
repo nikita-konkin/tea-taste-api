@@ -45,12 +45,14 @@ const authLimiter = rateLimit({
 // Middleware
 app.use(helmet());
 app.use(limiter);
-app.use(['/sign-in', '/sign-up'], authLimiter);
+app.use(['/sign-in', '/sign-up', '/password-reset'], authLimiter);
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+// Uploaded avatars (behind the /api proxy: /api/uploads/<file>).
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health endpoint: reports DB connectivity so orchestration can detect
 // a dead Mongo connection (readyState 1 = connected).
@@ -92,6 +94,7 @@ app.use(require('./routes/tastes').publicRouter);
 app.use(require('./routes/brewings').publicRouter);
 app.use(auth);
 app.use(require('./routes/users'));
+app.use(require('./routes/stats').privateRouter);
 app.use(require('./routes/aromas').privateRouter);
 app.use(require('./routes/tastes').privateRouter);
 app.use(require('./routes/brewings').privateRouter);

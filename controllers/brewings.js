@@ -1,4 +1,6 @@
 const Brewing = require("../models/brewing");
+const Aroma = require("../models/aroma");
+const Taste = require("../models/taste");
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 const { getTeaDataBySessionIdAndOwner, 
   getTeaDataBySessionIdAndPublicAccess
@@ -98,7 +100,39 @@ module.exports.getPublicBrews = (req, res, next) => {
 };
 
 module.exports.delBrewsBySessionID = (req, res, next) => {
-  
+
   delBySessionID(req, res, next, Brewing)
 
+};
+
+// Deletes ONE brewing of a session together with its aroma/taste records.
+module.exports.delBrewSelective = (req, res, next) => {
+  const owner = req.user._id;
+  const { sessionId, brewId } = req.params;
+  const filter = { owner: owner, sessionId: sessionId, brewingCount: brewId };
+
+  Promise.all([
+    Brewing.deleteMany(filter),
+    Aroma.deleteMany(filter),
+    Taste.deleteMany(filter),
+  ])
+    .then(([brews, aromas, tastes]) => {
+      if (brews.deletedCount === 0) {
+        const e = new Error("404 — Запись не найдена.");
+        e.statusCode = 404;
+        return next(e);
+      }
+      return res.send({
+        data: {
+          brewings: brews.deletedCount,
+          aromas: aromas.deletedCount,
+          tastes: tastes.deletedCount,
+        },
+      });
+    })
+    .catch((err) => {
+      const e = new Error(err.message);
+      e.statusCode = 500;
+      next(e);
+    });
 };

@@ -9,7 +9,10 @@ const {
   getUserById,
   updateUserProfile,
   updateUserPassword,
+  updateUserAvatar,
 } = require('../controllers/users');
+
+const { uploadAvatar } = require('../middlewares/upload');
 
 // Same password rules as at sign-up (see routes/signs.js).
 const passwordSchema = Joi.string()
@@ -32,9 +35,14 @@ router.patch('/profile/me', celebrate({
     email: Joi.string().email(),
     career: Joi.string().min(2).max(100).allow(''),
     about: Joi.string().min(2).max(500).allow(''),
-    avatar: Joi.string().uri({ scheme: ['http', 'https'] }).allow(''),
+    avatar: Joi.alternatives().try(
+      Joi.string().uri({ scheme: ['http', 'https'] }),
+      Joi.string().pattern(/^\/[^\s]+$/), // site-relative path (uploaded avatar)
+    ).allow(''),
   }).min(1),
 }), updateUserProfile);
+
+router.post('/profile/avatar', uploadAvatar, updateUserAvatar);
 
 router.patch('/profile/password', celebrate({
   body: Joi.object().keys({

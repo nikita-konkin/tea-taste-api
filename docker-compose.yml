@@ -8,6 +8,8 @@ services:
     #   - 3001:3001
     env_file:
       - .env
+    volumes:
+      - uploads:/app/uploads
     healthcheck:
       # 127.0.0.1, not localhost: the app listens on IPv4 only and alpine
       # resolves localhost to ::1 first.
@@ -22,3 +24,6 @@ services:
 networks:
   mynetwork:
     external: true
+
+volumes:
+  uploads:

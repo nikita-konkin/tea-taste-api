@@ -72,13 +72,9 @@ const userSchema = new mongoose.Schema(
     },
 
     owner: {
-      type: [
-        {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "user",
-          default: [],
-        },
-      ],
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "user",
+      required: true,
     },
     sessionId: {
       type: String,
@@ -87,5 +83,8 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+userSchema.index({ owner: 1, sessionId: 1 });
+userSchema.index({ publicAccess: 1, createdAt: -1 });
 
 module.exports = mongoose.model("teaform", userSchema);

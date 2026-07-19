@@ -59,6 +59,28 @@ describe('profile update', () => {
     expect(res.body.data.about).toBeUndefined();
   });
 
+  test('POST /profile/avatar uploads a file and saves the path', async () => {
+    // Tiny valid PNG header buffer is enough — only the mimetype is checked.
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const res = await request(app)
+      .post('/profile/avatar')
+      .set('Cookie', cookie)
+      .attach('avatar', png, { filename: 'me.png', contentType: 'image/png' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.avatar).toMatch(/^\/api\/uploads\/.+\.png$/);
+
+    const profile = await request(app).get('/profile/me').set('Cookie', cookie);
+    expect(profile.body.data.avatar).toBe(res.body.data.avatar);
+  });
+
+  test('POST /profile/avatar rejects non-image files -> 400', async () => {
+    const res = await request(app)
+      .post('/profile/avatar')
+      .set('Cookie', cookie)
+      .attach('avatar', Buffer.from('#!/bin/sh'), { filename: 'x.sh', contentType: 'text/x-sh' });
+    expect(res.status).toBe(400);
+  });
+
   test('invalid avatar URL -> 400', async () => {
     const res = await request(app)
       .patch('/profile/me')

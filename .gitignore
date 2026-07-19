@@ -16,3 +16,5 @@ node_modules
 
 # ENV
 .env
+# Uploaded avatars (runtime data, lives in the uploads volume)
+uploads/

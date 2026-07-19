@@ -8,6 +8,7 @@ const {
   delTeaFormBySessionID,
   patchTeaForm,
   getPublicTeaForms,
+  getPublicTeaFormById,
 } = require("../controllers/teaforms");
 
 const teaFormValidation = celebrate({
@@ -33,6 +34,11 @@ const teaFormValidation = celebrate({
 
 const publicRouter = express.Router();
 publicRouter.get('/public-forms', getPublicTeaForms);
+publicRouter.get('/public-form/:sessionId', celebrate({
+  params: Joi.object().keys({
+    sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
+  }),
+}), getPublicTeaFormById);
 
 const privateRouter = express.Router();
 

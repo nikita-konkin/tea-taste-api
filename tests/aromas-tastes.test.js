@@ -91,6 +91,21 @@ describe('taste descriptors', () => {
     expect(res.body.data).toBeNull();
   });
 
+  test('GET /my-descriptors returns the top descriptor paths', async () => {
+    const res = await request(app).get('/my-descriptors').set('Cookie', cookieA);
+    expect(res.status).toBe(200);
+    expect(res.body.aromas[0].stages[0]).toBe('Цветочный');
+    expect(res.body.aromas[0].count).toBeGreaterThanOrEqual(1);
+    expect(res.body.tastes[0].stages).toEqual(['Медовый', 'Липовый мёд', null]);
+  });
+
+  test('GET /my-descriptors for a user without records is empty', async () => {
+    const res = await request(app).get('/my-descriptors').set('Cookie', cookieB);
+    expect(res.status).toBe(200);
+    expect(res.body.aromas).toHaveLength(0);
+    expect(res.body.tastes).toHaveLength(0);
+  });
+
   test('selective DELETE removes one record', async () => {
     const res = await request(app)
       .delete(`/my-tastes/${SID}/brew/1/taste/1`)

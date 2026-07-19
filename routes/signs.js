@@ -11,6 +11,11 @@ const {
   logoutUser,
 } = require('../controllers/sign');
 
+const {
+  requestPasswordReset,
+  confirmPasswordReset,
+} = require('../controllers/passwordReset');
+
 // Define the Joi schema
 
 
@@ -55,5 +60,18 @@ createUser
 );
 
 router.post('/sign-out', logoutUser);
+
+router.post('/password-reset/request', celebrate({
+  [Segments.BODY]: Joi.object().keys({
+    email: emailSchema,
+  }),
+}), requestPasswordReset);
+
+router.post('/password-reset/confirm', celebrate({
+  [Segments.BODY]: Joi.object().keys({
+    token: Joi.string().hex().length(64).required(),
+    newPassword: passwordSchema,
+  }),
+}), confirmPasswordReset);
 
 module.exports = router;

@@ -91,18 +91,64 @@ module.exports.getTeaForms = (req, res, next) => {
     });
 };
 
-module.exports.getPublicTeaForms = (req, res, next) => {
-  TeaForm.find({ publicAccess: true })
+// Public feed with pagination, tea-type filter and sorting:
+//   ?page=1&limit=10&type=<exact tea type>&sort=date|-date|rating|-rating
+module.exports.getPublicTeaForms = async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+
+    const filter = { publicAccess: true };
+    if (req.query.type) filter.type = req.query.type;
+
+    const sortMap = {
+      date: { createdAt: -1 },
+      '-date': { createdAt: 1 },
+      rating: { averageRating: -1, createdAt: -1 },
+      '-rating': { averageRating: 1, createdAt: -1 },
+    };
+    const sort = sortMap[req.query.sort] || sortMap.date;
+
+    const [total, forms] = await Promise.all([
+      TeaForm.countDocuments(filter),
+      TeaForm.find(filter)
+        .sort(sort)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .populate('owner', 'name avatar'),
+    ]);
+
+    res.send({
+      data: forms,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+    });
+  } catch (err) {
+    const e = new Error(err.message);
+    e.statusCode = 500;
+    next(e);
+  }
+};
+
+// One public form by sessionId (shareable /blog/:sessionId pages).
+module.exports.getPublicTeaFormById = (req, res, next) => {
+  TeaForm.findOne({ sessionId: req.params.sessionId, publicAccess: true })
     .populate('owner', 'name avatar')
-    .then((forms) =>
-      res.send({
-        data: forms,
-      })
-    )
+    .orFail(() => {
+      const e = new Error('404 — Запись не найдена.');
+      e.statusCode = 404;
+      return e;
+    })
+    .then((form) => res.send({ data: form }))
     .catch((err) => {
-      const e = new Error(err.message);
-      e.statusCode = 500;
-      next(e);
+      if (err.statusCode) {
+        next(err);
+      } else {
+        const e = new Error(err.message);
+        e.statusCode = 500;
+        next(e);
+      }
     });
 }
 

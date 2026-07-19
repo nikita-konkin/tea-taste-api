@@ -17,13 +17,9 @@ const userSchema = new mongoose.Schema({
     required: true,
   },
   owner: {
-    type: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "users",
-        default: [],
-      },
-    ],
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user",
+    required: true,
   },
   publicAccess: {
     type: Boolean,
@@ -38,5 +34,7 @@ const userSchema = new mongoose.Schema({
     required: true,
   },
 });
+
+userSchema.index({ owner: 1, sessionId: 1 });
 
 module.exports = mongoose.model("brewing", userSchema);

@@ -77,6 +77,27 @@ module.exports.updateUserProfile = (req, res, next) => {
     });
 };
 
+// Stores the uploaded file's public path as the user's avatar. The API is
+// served behind the /api proxy prefix, so the browser-facing path is
+// /api/uploads/<file> (express serves it at /uploads).
+module.exports.updateUserAvatar = (req, res, next) => {
+  if (!req.file) {
+    const e = new Error('Файл не получен: отправьте изображение в поле "avatar".');
+    e.statusCode = 400;
+    return next(e);
+  }
+
+  const url = `/api/uploads/${req.file.filename}`;
+
+  return User.findByIdAndUpdate(req.user._id, { avatar: url }, { new: true })
+    .then((user) => res.send({ data: { avatar: user.avatar } }))
+    .catch(() => {
+      const e = new Error('500 — Ошибка по умолчанию.');
+      e.statusCode = 500;
+      next(e);
+    });
+};
+
 module.exports.updateUserPassword = (req, res, next) => {
   const { oldPassword, newPassword } = req.body;
 

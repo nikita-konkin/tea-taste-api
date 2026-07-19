@@ -108,9 +108,39 @@ describe('access control', () => {
 
     const res = await request(app).get('/public-forms');
     const form = res.body.data.find((f) => f.sessionId === SID);
-    expect(form.owner[0].name).toBe('Хозяин');
-    expect(form.owner[0].avatar).toBe('https://example.com/owner.png');
-    expect(form.owner[0].email).toBeUndefined();
+    expect(form.owner.name).toBe('Хозяин');
+    expect(form.owner.avatar).toBe('https://example.com/owner.png');
+    expect(form.owner.email).toBeUndefined();
+  });
+
+  test('GET /public-forms is paginated', async () => {
+    const res = await request(app).get('/public-forms?page=1&limit=1');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.total).toBeGreaterThanOrEqual(1);
+    expect(res.body.page).toBe(1);
+    expect(res.body.pages).toBeGreaterThanOrEqual(1);
+  });
+
+  test('GET /public-forms filters by tea type', async () => {
+    const match = await request(app).get(`/public-forms?type=${encodeURIComponent('Улун')}`);
+    expect(match.body.data.every((f) => f.type === 'Улун')).toBe(true);
+
+    const none = await request(app).get(`/public-forms?type=${encodeURIComponent('Мате')}`);
+    expect(none.body.data).toHaveLength(0);
+    expect(none.body.total).toBe(0);
+  });
+
+  test('GET /public-form/:sessionId returns one public form with its author', async () => {
+    const res = await request(app).get(`/public-form/${SID}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.sessionId).toBe(SID);
+    expect(res.body.data.owner.name).toBe('Хозяин');
+  });
+
+  test('GET /public-form/:sessionId for a nonexistent session -> 404', async () => {
+    const res = await request(app).get('/public-form/99999999-9999-4999-8999-999999999999');
+    expect(res.status).toBe(404);
   });
 
   test('DELETE /my-form of another user -> 404, form survives', async () => {

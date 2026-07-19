@@ -74,6 +74,33 @@ describe('brewings', () => {
     expect(res.body.data).toHaveLength(1);
   });
 
+  test('DELETE one brewing removes it with its aromas/tastes, keeps the rest', async () => {
+    await request(app)
+      .post(`/my-brewings/${SID}/brew/2`)
+      .set('Cookie', cookieA)
+      .send({ description: 'Второй пролив', brewingRating: 7, brewingTime: '0:00:20', publicAccess: true });
+    await request(app)
+      .post(`/my-aromas/${SID}/brew/2/aroma/1`)
+      .set('Cookie', cookieA)
+      .send({ aromaStage1: 'Цветочный', publicAccess: true });
+
+    const del = await request(app)
+      .delete(`/my-brewings/${SID}/brew/2`)
+      .set('Cookie', cookieA);
+    expect(del.status).toBe(200);
+    expect(del.body.data.brewings).toBe(1);
+    expect(del.body.data.aromas).toBe(1);
+
+    const left = await request(app).get(`/my-brewings/${SID}`).set('Cookie', cookieA);
+    expect(left.body.data).toHaveLength(1);
+    expect(left.body.data[0].brewingCount).toBe(1);
+
+    const again = await request(app)
+      .delete(`/my-brewings/${SID}/brew/2`)
+      .set('Cookie', cookieA);
+    expect(again.status).toBe(404);
+  });
+
   test('DELETE /my-brews by another user -> 404', async () => {
     const res = await request(app).delete(`/my-brews/${SID}`).set('Cookie', cookieB);
     expect(res.status).toBe(404);

@@ -3,10 +3,11 @@ const publicRouter = require("express").Router();
 
 const { celebrate, Joi } = require("celebrate");
 
-const { 
-  createBrew, 
-  getBrews, 
+const {
+  createBrew,
+  getBrews,
   delBrewsBySessionID,
+  delBrewSelective,
   patchBrew,
   getPublicBrews,
    } = require("../controllers/brewings");
@@ -51,6 +52,16 @@ privateRouter.patch(
   patchBrew
 );
 privateRouter.delete("/my-brews/:sessionId", delBrewsBySessionID);
+privateRouter.delete(
+  "/my-brewings/:sessionId/brew/:brewId",
+  celebrate({
+    params: Joi.object().keys({
+      sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
+      brewId: Joi.number().integer().required(),
+    }),
+  }),
+  delBrewSelective
+);
 
 publicRouter.get('/public-brewings/:sessionId', getPublicBrews);
 
