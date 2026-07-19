@@ -38,13 +38,6 @@ jobs:
           context: .
           push: true
           tags: nikita8konkin/tea-taste-api:latest
-      - name: Restart on the server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
-          script: |
-            cd ~/projects/tea-taste-api
-            docker compose pull && docker compose up -d
+      # No SSH restart step: the home server is not reachable from the
+      # internet (ISP blocks inbound). Watchtower on the server polls
+      # Docker Hub and restarts the container when :latest changes.
