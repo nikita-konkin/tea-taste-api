@@ -2,7 +2,7 @@ services:
   tea-backend:
     # image: nikitaikonkin/tea-taste-api
     container_name: tea-backend
-    build: .
+    build: nikita8konkin/tea-taste-api
     restart: unless-stopped
     # ports:
     #   - 3001:3001
