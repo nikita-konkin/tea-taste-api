@@ -8,7 +8,10 @@ const {
 
 const STATE_COOKIE_MS = 10 * 60 * 1000;
 
-const frontendBase = () => process.env.FRONTEND_URL || 'http://localhost:8088';
+// Same fallbacks as passwordReset.js: the real site in production, the
+// sandbox proxy otherwise.
+const frontendBase = () => process.env.FRONTEND_URL
+  || (process.env.NODE_ENV === 'production' ? 'https://teaform.ru' : 'http://localhost:8088');
 
 // The redirect URI registered in the VK app cabinet. Behind the outer nginx
 // the /api prefix is stripped, so the backend route is /auth/vk/callback.
