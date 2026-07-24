@@ -162,3 +162,65 @@ describe('access control', () => {
     expect(again.status).toBe(404);
   });
 });
+
+describe('tea photos', () => {
+  const PID = '22222222-2222-4222-8222-222222222222';
+  const dry = { url: '/api/uploads/abc-1700000000dead.jpg', kind: 'dry' };
+  const liquor = { url: '/api/uploads/abc-1700000001beef.png', kind: 'liquor' };
+
+  const create = (body) =>
+    request(app).post(`/create-form/${PID}`).set('Cookie', cookieA).send(body);
+  const patch = (body) =>
+    request(app).patch(`/create-form/${PID}`).set('Cookie', cookieA).send(body);
+  const read = async () =>
+    (await request(app).get(`/my-form/${PID}`).set('Cookie', cookieA)).body.data[0];
+
+  test('a form created without photos has an empty list', async () => {
+    expect((await create(formBody)).status).toBe(200);
+    expect((await read()).photos).toEqual([]);
+  });
+
+  test('PATCH stores photos and strips subdocument ids', async () => {
+    expect((await patch({ ...formBody, photos: [dry, liquor] })).status).toBe(200);
+    expect((await read()).photos).toEqual([dry, liquor]);
+  });
+
+  test('PATCH without photos leaves them untouched', async () => {
+    expect((await patch(formBody)).status).toBe(200);
+    expect((await read()).photos).toEqual([dry, liquor]);
+  });
+
+  test('a stored form round-trips through the edit dialog unchanged', async () => {
+    // FormEdit sends back exactly what it read, so that shape must validate.
+    const stored = await read();
+    const res = await patch({ ...formBody, photos: stored.photos });
+    expect(res.status).toBe(200);
+  });
+
+  test('PATCH with an empty array clears them', async () => {
+    expect((await patch({ ...formBody, photos: [] })).status).toBe(200);
+    expect((await read()).photos).toEqual([]);
+  });
+
+  test('the public feed exposes photos', async () => {
+    await patch({ ...formBody, photos: [dry] });
+    const res = await request(app).get(`/public-form/${PID}`);
+    expect(res.body.data.photos).toEqual([dry]);
+  });
+
+  test.each([
+    ['more than three photos', [dry, liquor, { ...dry, kind: 'wet' }, { url: dry.url, kind: 'dry' }]],
+    ['a duplicated kind', [dry, { ...liquor, kind: 'dry' }]],
+    ['an unknown kind', [{ url: dry.url, kind: 'bogus' }]],
+    ['an off-site url', [{ url: 'https://evil.example.com/x.jpg', kind: 'dry' }]],
+    ['a traversal url', [{ url: '/api/uploads/../../app.js', kind: 'dry' }]],
+    ['null', null],
+  ])('PATCH rejects %s -> 400', async (_label, photos) => {
+    expect((await patch({ ...formBody, photos })).status).toBe(400);
+  });
+
+  test('DELETE removes the form regardless of its photos', async () => {
+    expect((await request(app).delete(`/my-form/${PID}`).set('Cookie', cookieA)).status).toBe(200);
+    expect((await request(app).get(`/my-form/${PID}`).set('Cookie', cookieA)).body.data).toHaveLength(0);
+  });
+});

@@ -1,0 +1,52 @@
+const path = require('path');
+const fs = require('fs');
+
+const { uploadDir } = require('../middlewares/upload');
+
+// Uploads are document-agnostic on purpose: the tasting form is only created
+// at the last step of the wizard, while the earlier steps live in localStorage
+// (which cannot hold a File). So a photo is stored as soon as it is picked and
+// only its URL travels through the form state.
+module.exports.createTeaPhoto = (req, res, next) => {
+  if (!req.file) {
+    const e = new Error('Файл не получен: отправьте изображение в поле "photo".');
+    e.statusCode = 400;
+    return next(e);
+  }
+
+  // Served by express at /uploads, reached by the browser through the /api proxy.
+  return res.send({ data: { url: `/api/uploads/${req.file.filename}` } });
+};
+
+// True only for a bare filename inside uploadDir that this user uploaded.
+// All three checks matter: the prefix proves ownership, basename rejects any
+// path segment, and resolve() is the backstop against traversal.
+const ownsUpload = (filename, userId) => {
+  if (typeof filename !== 'string' || !filename) return false;
+  if (path.basename(filename) !== filename) return false;
+  if (!filename.startsWith(`${String(userId)}-`)) return false;
+  return path.resolve(uploadDir, filename).startsWith(uploadDir + path.sep);
+};
+
+module.exports.deleteTeaPhoto = (req, res, next) => {
+  const { filename } = req.params;
+
+  if (!ownsUpload(filename, req.user._id)) {
+    const e = new Error('403 — Нет доступа к этому файлу.');
+    e.statusCode = 403;
+    return next(e);
+  }
+
+  // Idempotent: removing an already-removed photo is a success, so the UI does
+  // not have to distinguish a double click from a real failure.
+  return fs.promises.unlink(path.join(uploadDir, filename))
+    .then(() => res.status(204).send())
+    .catch((err) => {
+      if (err.code === 'ENOENT') return res.status(204).send();
+      const e = new Error('500 — Ошибка по умолчанию.');
+      e.statusCode = 500;
+      return next(e);
+    });
+};
+
+module.exports.ownsUpload = ownsUpload;

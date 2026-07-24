@@ -94,6 +94,7 @@ app.use(require('./routes/tastes').publicRouter);
 app.use(require('./routes/brewings').publicRouter);
 app.use(auth);
 app.use(require('./routes/users'));
+app.use(require('./routes/uploads').privateRouter);
 app.use(require('./routes/admin').privateRouter);
 app.use(require('./routes/suggestions').privateRouter);
 app.use(require('./routes/stats').privateRouter);

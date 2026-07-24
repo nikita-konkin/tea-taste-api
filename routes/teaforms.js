@@ -26,6 +26,16 @@ const teaFormValidation = celebrate({
     brewingtype: Joi.string().min(2).max(60).required(),
     publicAccess: Joi.boolean().required(),
     averageRating: Joi.number().min(1).max(10).precision(2).required(),
+    // Optional so existing clients that omit it keep working, and explicitly
+    // without .default([]) — celebrate replaces req.body with Joi's output, so
+    // a default would wipe the stored photos on every PATCH that omits the key.
+    // The required extension in the pattern is what rejects a bare ".." segment.
+    photos: Joi.array().max(3).unique('kind').items(
+      Joi.object().keys({
+        url: Joi.string().pattern(/^\/api\/uploads\/[A-Za-z0-9_-]+\.[A-Za-z0-9]{2,5}$/).required(),
+        kind: Joi.string().valid('dry', 'liquor', 'wet').required(),
+      }),
+    ),
   }),
   params: Joi.object().keys({
     sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),

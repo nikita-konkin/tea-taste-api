@@ -71,6 +71,19 @@ const userSchema = new mongoose.Schema(
       max: 10,
     },
 
+    // Up to three labelled shots of the tasting: dry leaf, liquor, wet leaf.
+    // _id: false keeps the subdocuments as plain {url, kind} pairs — the edit
+    // dialog sends them straight back and the Joi body schema rejects extras.
+    // Note findOneAndUpdate/updateMany skip validators, so the enum here is
+    // documentation; the celebrate schema in routes/teaforms.js is the gate.
+    photos: [
+      {
+        url: { type: String, required: true },
+        kind: { type: String, enum: ["dry", "liquor", "wet"], required: true },
+        _id: false,
+      },
+    ],
+
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "user",

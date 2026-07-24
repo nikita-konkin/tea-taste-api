@@ -1,6 +1,11 @@
+const path = require("path");
+const fs = require("fs");
+
 const TeaForm = require("../models/teaform");
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 const { getTeaDataBySessionIdAndOwner } = require("../utils/getTeaDataBy")
+const { uploadDir } = require("../middlewares/upload");
+const { ownsUpload } = require("./uploads");
 
 module.exports.createTeaForm = (req, res, next) => {
   const {
@@ -16,7 +21,8 @@ module.exports.createTeaForm = (req, res, next) => {
     teaware,
     brewingtype,
     publicAccess,
-    averageRating
+    averageRating,
+    photos
   } = req.body;
   // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
 
@@ -45,7 +51,8 @@ module.exports.createTeaForm = (req, res, next) => {
         publicAccess: publicAccess,
         sessionId: sessionId,
         owner: owner,
-        averageRating: averageRating
+        averageRating: averageRating,
+        photos: photos
       },
     },
     { upsert: true }
@@ -167,7 +174,8 @@ module.exports.patchTeaForm = (req, res, next) => {
     teaware,
     brewingtype,
     publicAccess,
-    averageRating
+    averageRating,
+    photos
   } = req.body;
   // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
 
@@ -192,7 +200,10 @@ module.exports.patchTeaForm = (req, res, next) => {
       teaware: teaware,
       brewingtype: brewingtype,
       publicAccess: publicAccess,
-      averageRating: averageRating
+      averageRating: averageRating,
+      // Mongoose drops undefined keys from the cast update, so omitting photos
+      // preserves them, while an explicit [] clears them.
+      photos: photos
       // $set: {
       // sessionId: sessionId,
       // owner: owner,
@@ -219,8 +230,28 @@ module.exports.patchTeaForm = (req, res, next) => {
     });
 }
 
+// Best-effort removal of a deleted form's photo files. Runs after the response
+// is on its way: a failed unlink must never turn a successful delete into an
+// error. The ownership guard is the same one the delete endpoint uses.
+const unlinkFormPhotos = (photos, ownerId) => {
+  (photos || []).forEach((photo) => {
+    const filename = path.basename(String(photo.url || ""));
+    if (!ownsUpload(filename, ownerId)) return;
+    fs.promises.unlink(path.join(uploadDir, filename)).catch(() => {});
+  });
+};
+
 module.exports.delTeaFormBySessionID = (req, res, next) => {
-  
-  delBySessionID(req, res, next, TeaForm)
+
+  // Read the photo list before delBySessionID removes the document.
+  TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
+    .catch(() => null)
+    .then((form) => {
+      const photos = form ? form.photos : [];
+      res.on("finish", () => {
+        if (res.statusCode < 400) unlinkFormPhotos(photos, req.user._id);
+      });
+      delBySessionID(req, res, next, TeaForm);
+    });
 
 };
