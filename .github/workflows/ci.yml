@@ -18,6 +18,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 18, cache: npm }
+      # The voice-note tests transcode and concatenate real audio. The hosted
+      # runner ships ffmpeg, but installing it explicitly keeps the job honest
+      # if that ever changes.
+      - run: ffmpeg -version > /dev/null 2>&1 || sudo apt-get install -y ffmpeg
       - run: npm ci
       - run: npm test
         env:

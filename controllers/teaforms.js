@@ -6,6 +6,20 @@ const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 const { getTeaDataBySessionIdAndOwner } = require("../utils/getTeaDataBy")
 const { uploadDir } = require("../middlewares/upload");
 const { ownsUpload } = require("./uploads");
+const { enqueue } = require("../utils/voiceJob");
+
+// Only `segments` is the client's to send. Everything else under `voice` —
+// the merged track, the transcript, the recognition status and operation id —
+// is written by the background job, and an edit dialog that was opened before
+// recognition finished would otherwise save its stale copy back over it.
+const clientSegments = (voice) => {
+  if (!voice || !Array.isArray(voice.segments)) return undefined;
+  return voice.segments.map(({ url, brewingNumber, duration }) => ({
+    url,
+    brewingNumber: Number(brewingNumber) || 0,
+    duration: Number(duration) || 0,
+  }));
+};
 
 module.exports.createTeaForm = (req, res, next) => {
   const {
@@ -22,13 +36,21 @@ module.exports.createTeaForm = (req, res, next) => {
     brewingtype,
     publicAccess,
     averageRating,
-    photos
+    photos,
+    voice
   } = req.body;
   // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
   // const brewingCount = req.params.brewId;
+
+  const segments = clientSegments(voice);
+  // "queued" is what the transcription job looks for; with no recordings the
+  // key is omitted entirely and the model's own default applies.
+  const voiceDoc = segments && segments.length
+    ? { segments, status: "queued" }
+    : undefined;
 
   TeaForm.updateMany(
     {
@@ -52,16 +74,20 @@ module.exports.createTeaForm = (req, res, next) => {
         sessionId: sessionId,
         owner: owner,
         averageRating: averageRating,
-        photos: photos
+        photos: photos,
+        voice: voiceDoc
       },
     },
     { upsert: true }
   )
-    .then((form) =>
-      res.send({
+    .then((form) => {
+      // After the response: merging and recognition take far longer than a
+      // request may, and the tasting is saved either way.
+      if (voiceDoc) enqueue(owner, sessionId);
+      return res.send({
         data: form,
-      })
-    )
+      });
+    })
     .catch((err) => {
       if (err.name === "ValidationError") {
         const e = new Error(
@@ -175,46 +201,65 @@ module.exports.patchTeaForm = (req, res, next) => {
     brewingtype,
     publicAccess,
     averageRating,
-    photos
+    photos,
+    voice
   } = req.body;
   // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
 
+  const update = {
+    nameRU: nameRU,
+    country: country,
+    shop: shop,
+    type: type,
+    weight: weight,
+    water: water,
+    volume: volume,
+    temperature: temperature,
+    price: price,
+    teaware: teaware,
+    brewingtype: brewingtype,
+    publicAccess: publicAccess,
+    averageRating: averageRating,
+    // Mongoose drops undefined keys from the cast update, so omitting photos
+    // preserves them, while an explicit [] clears them.
+    photos: photos
+    // $set: {
+    // sessionId: sessionId,
+    // owner: owner,
+  };
+
+  const segments = clientSegments(voice);
+  if (segments) {
+    // Sub-paths, deliberately: assigning `voice` as a whole object would
+    // replace the entire subdocument and take the transcript and merged track
+    // with it, even though the client never sent either.
+    update["voice.segments"] = segments;
+    update["voice.status"] = segments.length ? "queued" : "idle";
+    update["voice.error"] = "";
+    if (!segments.length) {
+      update["voice.transcript"] = "";
+      update["voice.operationId"] = "";
+      update["voice.track"] = { url: "", duration: 0 };
+    }
+  }
+
   TeaForm.findOneAndUpdate(
     {
       sessionId: sessionId,
       owner: owner,
     },
-    {
-      nameRU: nameRU,
-      country: country,
-      shop: shop,
-      type: type,
-      weight: weight,
-      water: water,
-      volume: volume,
-      temperature: temperature,
-      price: price,
-      teaware: teaware,
-      brewingtype: brewingtype,
-      publicAccess: publicAccess,
-      averageRating: averageRating,
-      // Mongoose drops undefined keys from the cast update, so omitting photos
-      // preserves them, while an explicit [] clears them.
-      photos: photos
-      // $set: {
-      // sessionId: sessionId,
-      // owner: owner,
-    },
+    update,
     {new : true}
     )
-    .then((form) =>
-      res.send({
+    .then((form) => {
+      if (segments && segments.length) enqueue(owner, sessionId);
+      return res.send({
         data: form,
-      })
-    )
+      });
+    })
     .catch((err) => {
       if (err.name === "ValidationError") {
         const e = new Error(
@@ -230,26 +275,67 @@ module.exports.patchTeaForm = (req, res, next) => {
     });
 }
 
-// Best-effort removal of a deleted form's photo files. Runs after the response
-// is on its way: a failed unlink must never turn a successful delete into an
-// error. The ownership guard is the same one the delete endpoint uses.
-const unlinkFormPhotos = (photos, ownerId) => {
-  (photos || []).forEach((photo) => {
-    const filename = path.basename(String(photo.url || ""));
+// Small polling target for the recorder UI: the merge and the recognition are
+// both slower than a request, so the frontend watches this rather than refetching
+// the whole tasting every few seconds.
+module.exports.getVoiceStatus = (req, res, next) => {
+  TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
+    .select("voice")
+    .orFail(() => {
+      const e = new Error("404 — Запись не найдена.");
+      e.statusCode = 404;
+      return e;
+    })
+    .then((form) => {
+      const voice = form.voice || {};
+      res.send({
+        data: {
+          status: voice.status || "idle",
+          transcript: voice.transcript || "",
+          track: voice.track || null,
+          error: voice.error || "",
+        },
+      });
+    })
+    .catch((err) => {
+      if (err.statusCode) return next(err);
+      const e = new Error("500 — Ошибка по умолчанию.");
+      e.statusCode = 500;
+      return next(e);
+    });
+};
+
+// Best-effort removal of a deleted form's uploaded files — photos, every voice
+// segment and the merged track. Runs after the response is on its way: a failed
+// unlink must never turn a successful delete into an error. The ownership guard
+// is the same one the delete endpoint uses.
+const unlinkFormFiles = (urls, ownerId) => {
+  urls.forEach((url) => {
+    const filename = path.basename(String(url || ""));
     if (!ownsUpload(filename, ownerId)) return;
     fs.promises.unlink(path.join(uploadDir, filename)).catch(() => {});
   });
 };
 
+const formFileUrls = (form) => {
+  if (!form) return [];
+  const voice = form.voice || {};
+  return [
+    ...(form.photos || []).map((photo) => photo.url),
+    ...(voice.segments || []).map((segment) => segment.url),
+    (voice.track && voice.track.url) || "",
+  ].filter(Boolean);
+};
+
 module.exports.delTeaFormBySessionID = (req, res, next) => {
 
-  // Read the photo list before delBySessionID removes the document.
+  // Read the file list before delBySessionID removes the document.
   TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
     .catch(() => null)
     .then((form) => {
-      const photos = form ? form.photos : [];
+      const urls = formFileUrls(form);
       res.on("finish", () => {
-        if (res.statusCode < 400) unlinkFormPhotos(photos, req.user._id);
+        if (res.statusCode < 400) unlinkFormFiles(urls, req.user._id);
       });
       delBySessionID(req, res, next, TeaForm);
     });

@@ -84,6 +84,42 @@ const userSchema = new mongoose.Schema(
       },
     ],
 
+    // Spoken notes: one short recording per пролив (brewingNumber 1..N) plus an
+    // optional general one (0), merged server-side into a single track that is
+    // what gets played back and sent for recognition.
+    //
+    // They live here rather than on the Brewing documents because a note
+    // recorded during stage 2 has no brewing _id yet — brewings are only created
+    // when the wizard submits — and because the merged track and the transcript
+    // are properties of the tasting as a whole.
+    //
+    // track/transcript/status/operationId/error are written by the background
+    // job, never by the client: patchTeaForm drops them from an incoming body so
+    // an edit dialog opened before recognition finished cannot save over the
+    // transcript that arrived while it was open.
+    voice: {
+      segments: [
+        {
+          url: { type: String, required: true },
+          brewingNumber: { type: Number, default: 0 },
+          duration: { type: Number, default: 0 },
+          _id: false,
+        },
+      ],
+      track: {
+        url: { type: String },
+        duration: { type: Number },
+      },
+      transcript: { type: String },
+      status: {
+        type: String,
+        enum: ["idle", "queued", "processing", "done", "error"],
+        default: "idle",
+      },
+      operationId: { type: String },
+      error: { type: String },
+    },
+
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "user",

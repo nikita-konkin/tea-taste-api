@@ -9,6 +9,8 @@ const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
 const { isCelebrateError } = require('celebrate');
 const auth = require('./middlewares/auth');
+const { hasFfmpeg } = require('./utils/audio');
+const { resume: resumeVoiceJobs } = require('./utils/voiceJob');
 
 const app = express();
 
@@ -147,6 +149,16 @@ async function start() {
   try {
     await mongoose.connect(mdbAddr);
     console.log('MongoDB connected');
+
+    // Voice notes: warn once if the transcoder is missing rather than letting
+    // the first recording fail with a raw ENOENT, and pick up any recognition
+    // that was in flight when this process last stopped.
+    hasFfmpeg().then((ready) => {
+      if (!ready) console.warn('ffmpeg not found — voice notes will be rejected');
+    });
+    resumeVoiceJobs()
+      .then((count) => { if (count) console.log(`Resumed ${count} voice job(s)`); })
+      .catch((err) => console.warn('Could not resume voice jobs:', err.message));
 
     server = app.listen(port, '0.0.0.0', () => {
       console.log(`Server running on http://0.0.0.0:${port}`);
