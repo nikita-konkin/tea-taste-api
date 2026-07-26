@@ -7,6 +7,7 @@ const { getTeaDataBySessionIdAndOwner } = require("../utils/getTeaDataBy")
 const { uploadDir } = require("../middlewares/upload");
 const { ownsUpload } = require("./uploads");
 const { enqueue } = require("../utils/voiceJob");
+const { extractFromTranscript } = require("../utils/extractForm");
 
 // Only `segments` is the client's to send. Everything else under `voice` —
 // the merged track, the transcript, the recognition status and operation id —
@@ -49,8 +50,13 @@ module.exports.createTeaForm = (req, res, next) => {
   // "queued" is what the transcription job looks for; with no recordings the
   // key is omitted entirely and the model's own default applies.
   const voiceDoc = segments && segments.length
-    ? { segments, status: "queued" }
+    ? { segments, status: "queued", public: false }
     : undefined;
+
+  // A tasting that carries a recording is never published on creation: the
+  // wizard cannot know what else ended up on the tape. Publishing it stays a
+  // deliberate act in /my_forms, after the owner has heard it back.
+  const publishable = voiceDoc ? false : publicAccess;
 
   TeaForm.updateMany(
     {
@@ -70,7 +76,7 @@ module.exports.createTeaForm = (req, res, next) => {
         price: price,
         teaware: teaware,
         brewingtype: brewingtype,
-        publicAccess: publicAccess,
+        publicAccess: publishable,
         sessionId: sessionId,
         owner: owner,
         averageRating: averageRating,
@@ -152,7 +158,13 @@ module.exports.getPublicTeaForms = async (req, res, next) => {
     ]);
 
     res.send({
-      data: forms,
+      // Same rule as the single public form: the feed must not carry audio the
+      // owner has not shared.
+      data: forms.map((form) => {
+        const shared = form.toObject();
+        if (!shared.voice || !shared.voice.public) delete shared.voice;
+        return shared;
+      }),
       total,
       page,
       pages: Math.ceil(total / limit) || 1,
@@ -173,7 +185,14 @@ module.exports.getPublicTeaFormById = (req, res, next) => {
       e.statusCode = 404;
       return e;
     })
-    .then((form) => res.send({ data: form }))
+    .then((form) => {
+      // The tasting being public does not make its audio public. Withheld at the
+      // response, not just hidden in the UI: the raw endpoint is what a scraper
+      // reads, and an unshared recording must not be in it at all.
+      const shared = form.toObject();
+      if (!shared.voice || !shared.voice.public) delete shared.voice;
+      return res.send({ data: shared });
+    })
     .catch((err) => {
       if (err.statusCode) {
         next(err);
@@ -230,6 +249,12 @@ module.exports.patchTeaForm = (req, res, next) => {
     // sessionId: sessionId,
     // owner: owner,
   };
+
+  // Sharing the recording is the owner's call and is edited on its own, without
+  // touching the segments — so it is handled apart from the block below.
+  if (voice && typeof voice.public === "boolean") {
+    update["voice.public"] = voice.public;
+  }
 
   const segments = clientSegments(voice);
   if (segments) {
@@ -296,6 +321,42 @@ module.exports.getVoiceStatus = (req, res, next) => {
           error: voice.error || "",
         },
       });
+    })
+    .catch((err) => {
+      if (err.statusCode) return next(err);
+      const e = new Error("500 — Ошибка по умолчанию.");
+      e.statusCode = 500;
+      return next(e);
+    });
+};
+
+// Turns the transcript into field suggestions. Deliberately does NOT write the
+// form: the user confirms field by field, so a confident-but-wrong extraction
+// costs a rejected suggestion rather than overwritten data.
+module.exports.extractFromVoice = (req, res, next) => {
+  TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
+    .select("voice")
+    .orFail(() => {
+      const e = new Error("404 — Запись не найдена.");
+      e.statusCode = 404;
+      return e;
+    })
+    .then((form) => {
+      const transcript = (form.voice && form.voice.transcript) || "";
+      if (!transcript.trim()) {
+        const e = new Error("Расшифровка ещё не готова.");
+        e.statusCode = 409;
+        throw e;
+      }
+      return extractFromTranscript(transcript);
+    })
+    .then((result) => {
+      if (!result.ok) {
+        const e = new Error(result.reason);
+        e.statusCode = 502;
+        throw e;
+      }
+      res.send({ data: result.data, droppedPaths: result.droppedPaths });
     })
     .catch((err) => {
       if (err.statusCode) return next(err);

@@ -10,6 +10,7 @@ const {
   getPublicTeaForms,
   getPublicTeaFormById,
   getVoiceStatus,
+  extractFromVoice,
 } = require("../controllers/teaforms");
 
 // Shared by the photo and voice URLs. Anchored, with a required extension:
@@ -58,6 +59,8 @@ const teaFormValidation = celebrate({
         duration: Joi.number().min(0).max(900),
       }),
       transcript: Joi.string().allow('').max(20000),
+      // Unlike transcript/status, this one IS the client's to set.
+      public: Joi.boolean(),
       status: Joi.string().valid('idle', 'queued', 'processing', 'done', 'error'),
       operationId: Joi.string().allow('').max(200),
       error: Joi.string().allow('').max(500),
@@ -85,6 +88,11 @@ privateRouter.get("/my-form/:sessionId/voice", celebrate({
     sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 }), getVoiceStatus);
+privateRouter.post("/my-form/:sessionId/extract", celebrate({
+  params: Joi.object().keys({
+    sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
+  }),
+}), extractFromVoice);
 privateRouter.delete("/my-form/:sessionId", delTeaFormBySessionID);
 privateRouter.post("/create-form/:sessionId", teaFormValidation, createTeaForm);
 privateRouter.patch("/create-form/:sessionId", teaFormValidation, patchTeaForm);

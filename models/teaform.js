@@ -111,6 +111,10 @@ const userSchema = new mongoose.Schema(
         duration: { type: Number },
       },
       transcript: { type: String },
+      // A recording captures whatever else was in the room — other people, the
+      // kitchen, the kids. So sharing the audio is a separate, explicit decision
+      // from publishing the tasting text, and it defaults to off.
+      public: { type: Boolean, default: false },
       status: {
         type: String,
         enum: ["idle", "queued", "processing", "done", "error"],

@@ -94,6 +94,27 @@ const FORM_PROPS = {
   },
 };
 
+// The prompt tells the model to describe any note it cannot express as a path,
+// and on real recordings it does. This is the backstop for when it does not:
+// «иван-чай» and «помидор» were both named out loud on a test tasting and are
+// both absent from the taxonomy, so without this they would simply disappear.
+//
+// Only appends what the description does not already say, since the model usually
+// mentions them itself and repeating the words reads as a bug.
+const withUnmatched = (description, dropped) => {
+  const text = String(description || '').trim();
+  if (!dropped.length) return text;
+
+  const lower = text.toLowerCase();
+  const missing = [...new Set(dropped
+    .map((path) => String(path).split(/\s*(?:→|->|\/|>)\s*/).pop().trim())
+    .filter((word) => word && !lower.includes(word.toLowerCase())))];
+
+  if (!missing.length) return text;
+  const tail = `Также прозвучало: ${missing.join(', ')}.`;
+  return text ? `${text} ${tail}` : tail;
+};
+
 const FORM_SCHEMA = {
   type: 'object',
   properties: FORM_PROPS,
@@ -118,7 +139,8 @@ const systemPrompt = (aromaTree, tasteTree) => `Ты помогаешь запо
 2. Исправляй очевидные ошибки распознавания в названиях чая ("Шэньпээр" → "Шэн пуэр").
 3. Проливы нумеруй по порядку так, как их называет говорящий.
 4. В description каждого пролива — короткое описание впечатления словами говорящего.
-5. Ароматы и вкусы указывай ТОЛЬКО путями из справочников ниже, через " → ". Разрешён неполный путь ("Древесный" или "Древесный → Кора"). Если подходящего пути нет — не указывай ничего.
+5. Ароматы и вкусы указывай ТОЛЬКО путями из справочников ниже, через " → ". Разрешён неполный путь ("Древесный" или "Древесный → Кора").
+6. Если для прозвучавшего оттенка подходящего пути в справочнике НЕТ — не выдумывай путь, а обязательно опиши этот оттенок словами в description этого пролива. Ни один названный оттенок не должен потеряться.
 
 Числа легко перепутать, поэтому отдельно:
 - weight — сколько грамм СУХОГО ЛИСТА положили в чайник для этой дегустации (обычно 4–10 г). Это НЕ вес купленной упаковки.
@@ -161,7 +183,12 @@ const extractFromTranscript = async (transcript) => {
     const a = keepKnown(brewing.aromas, knownAromas);
     const t = keepKnown(brewing.tastes, knownTastes);
     droppedPaths.push(...a.dropped, ...t.dropped);
-    return stripEmpty({ ...brewing, aromas: a.kept, tastes: t.kept });
+    return stripEmpty({
+      ...brewing,
+      description: withUnmatched(brewing.description, [...a.dropped, ...t.dropped]),
+      aromas: a.kept,
+      tastes: t.kept,
+    });
   });
 
   return {
