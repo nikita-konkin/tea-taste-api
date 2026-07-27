@@ -54,6 +54,18 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user',
   },
+  // Recognition is billed to the service owner per 15 seconds of audio, so the
+  // monthly allowance is counted here rather than trusted to the client.
+  // voicePeriod is YYYY-MM: a different month means the counter starts over,
+  // which avoids a scheduled job just to reset it.
+  voiceSeconds: {
+    type: Number,
+    default: 0,
+  },
+  voicePeriod: {
+    type: String,
+    default: '',
+  },
   passwordResetToken: {
     type: String,
     select: false,

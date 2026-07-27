@@ -552,3 +552,83 @@ describe('deleting the form', () => {
     expect(fs.existsSync(path.join(uploadDir, path.basename(track)))).toBe(false);
   }, 30000);
 });
+
+// The resolver rewrites what the model produced into vocabulary entries, so its
+// rules are worth pinning: a near-miss that silently resolves onto the catch-all
+// category loses the descriptor entirely — neither stored nor mentioned in the
+// description — and nothing downstream would reveal it.
+describe('descriptor resolution against the vocabulary', () => {
+  const { keepKnown } = require('../utils/extractForm');
+  const known = new Set([
+    'Овощной', 'Овощной → Томат', 'Пряный', 'Другое',
+    'Терпкий', 'Ферментированный', 'Ферментированный → Спиртовой',
+  ]);
+
+  test('resolves a descriptor filed under the wrong branch', () => {
+    expect(keepKnown(['Другое → Спиртовой'], known).kept)
+      .toEqual(['Ферментированный → Спиртовой']);
+  });
+
+  test('an unresolvable path is reported so it can reach the description', () => {
+    const { kept, dropped } = keepKnown(['Другое → Спиртовой оттенок'], known);
+    expect(kept).toEqual([]);
+    expect(dropped).toEqual(['Другое → Спиртовой оттенок']);
+  });
+
+  test('the catch-all category is discarded, not written into the description', () => {
+    const { kept, dropped } = keepKnown(['Другое', 'Терпкий'], known);
+    expect(kept).toEqual(['Терпкий']);
+    expect(dropped).toEqual([]);
+  });
+
+  test('a parent implied by its own child is collapsed', () => {
+    expect(keepKnown(['Овощной → Томат', 'Пряный', 'Овощной'], known).kept)
+      .toEqual(['Овощной → Томат', 'Пряный']);
+  });
+
+  test('matching ignores case, ё and punctuation', () => {
+    expect(keepKnown(['овощной→томат'], known).kept).toEqual(['Овощной → Томат']);
+  });
+
+  test('the same descriptor twice is kept once', () => {
+    expect(keepKnown(['Пряный', 'Пряный'], known).kept).toEqual(['Пряный']);
+  });
+});
+
+// The quota is what stands between one user and an unbounded SpeechKit bill, and
+// it is booked before any audio is sent — refusing afterwards would be billed.
+describe('monthly transcription quota', () => {
+  const { reserve, MONTHLY_LIMIT_SECONDS, currentPeriod } = require('../utils/voiceQuota');
+  const User = require('../models/user');
+
+  beforeEach(() => User.updateOne(
+    { _id: userIdA },
+    { voiceSeconds: 0, voicePeriod: currentPeriod() },
+  ));
+
+  test('accumulates across recordings', async () => {
+    expect((await reserve(userIdA, 60)).used).toBe(60);
+    expect((await reserve(userIdA, 90)).used).toBe(150);
+  });
+
+  test('refuses once the month is spent, and says how much is left', async () => {
+    await reserve(userIdA, MONTHLY_LIMIT_SECONDS - 30);
+    const denied = await reserve(userIdA, 120);
+    expect(denied.ok).toBe(false);
+    expect(denied.reason).toMatch(/лимит/i);
+
+    // Nothing is booked for a refused request.
+    const user = await User.findById(userIdA).select('voiceSeconds');
+    expect(user.voiceSeconds).toBe(MONTHLY_LIMIT_SECONDS - 30);
+  });
+
+  test('a new month starts the allowance over', async () => {
+    await User.updateOne(
+      { _id: userIdA },
+      { voiceSeconds: MONTHLY_LIMIT_SECONDS, voicePeriod: '2001-01' },
+    );
+    const fresh = await reserve(userIdA, 300);
+    expect(fresh.ok).toBe(true);
+    expect(fresh.used).toBe(300);
+  });
+});

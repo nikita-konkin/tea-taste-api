@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const TeaForm = require('../models/teaform');
 const { uploadDir } = require('../middlewares/upload');
 const { ownsUpload } = require('../controllers/uploads');
+const { reserve } = require('./voiceQuota');
 const {
   concatMp3, hasFfmpeg, squeezeForRecognition, MAX_TRACK_SECONDS,
 } = require('./audio');
@@ -60,7 +61,11 @@ const pollTranscript = async (operationId) => {
   throw new Error('Расшифровка не завершилась за отведённое время.');
 };
 
-const transcribe = async (owner, sessionId, trackPath) => {
+const transcribe = async (owner, sessionId, trackPath, seconds) => {
+  // Booked before the upload: refusing afterwards would still be billed.
+  const quota = await reserve(owner, seconds);
+  if (!quota.ok) return fail(owner, sessionId, quota.reason);
+
   // Recognition is billed per 15 s, so the silence goes before the upload — but
   // only from this throwaway copy, never from the track the user plays back.
   const squeezed = await squeezeForRecognition(trackPath);
@@ -171,7 +176,7 @@ const run = async (owner, sessionId, resumeOperationId) => {
       return;
     }
 
-    await transcribe(owner, sessionId, trackPath);
+    await transcribe(owner, sessionId, trackPath, duration);
   } catch (err) {
     await fail(owner, sessionId, err.message);
   } finally {

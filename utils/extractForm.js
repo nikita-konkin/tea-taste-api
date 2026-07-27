@@ -79,11 +79,22 @@ const resolvePath = (raw, index) => {
   // is what the model tends to get wrong.
   const segments = path.split(SEP).map((s) => s.trim()).filter(Boolean).reverse();
   for (const segment of segments) {
+    // Never resolve onto the catch-all. "Другое → Спиртовой оттенок" would
+    // otherwise match on its "Другое" half and be discarded as meaningless,
+    // losing the descriptor entirely instead of letting it fall through to the
+    // пролив description.
+    if (CATCH_ALL.has(norm(segment))) continue;
     const hit = index.byLeaf.get(norm(segment));
-    if (hit) return hit;
+    if (hit && !CATCH_ALL.has(norm(hit))) return hit;
   }
   return null;
 };
+
+// "Другое" is a real category, so it resolves — but as a descriptor it says
+// nothing, and it would appear on most tastings once resolution stopped dropping
+// near-misses. Discarded outright rather than pushed to `dropped`: «Также
+// прозвучало: Другое» in the description would be worse than losing it.
+const CATCH_ALL = new Set([norm('Другое')]);
 
 const keepKnown = (paths, known) => {
   const index = buildIndex(known);
@@ -92,11 +103,21 @@ const keepKnown = (paths, known) => {
 
   (paths || []).forEach((raw) => {
     const resolved = resolvePath(raw, index);
-    if (resolved && !kept.includes(resolved)) kept.push(resolved);
-    else if (!resolved) dropped.push(raw);
+    if (!resolved) {
+      dropped.push(raw);
+      return;
+    }
+    if (CATCH_ALL.has(norm(resolved))) return;
+    if (!kept.includes(resolved)) kept.push(resolved);
   });
 
-  return { kept, dropped };
+  // A parent is implied by its own child, so "Овощной" alongside
+  // "Овощной → Томат" is noise. Keeps only the paths nothing else extends.
+  const specific = kept.filter(
+    (path) => !kept.some((other) => other !== path && other.startsWith(`${path}${SEP}`)),
+  );
+
+  return { kept: specific, dropped };
 };
 
 // YandexGPT's structured output is strict: every property must be listed in
@@ -124,6 +145,11 @@ const BREWING_PROPS = {
 };
 
 const FORM_PROPS = {
+  // Asked of the model rather than guessed at afterwards, and it costs nothing:
+  // two more fields on a call that was happening anyway. Without it an off-topic
+  // recording is silently mined for tea data and the form fills with invention.
+  isTeaTasting: nullable('boolean', 'true, если запись действительно о дегустации чая'),
+  topic: nullable('string', 'Если запись не о чае — коротко, о чём она на самом деле'),
   nameRU: nullable('string', 'Название чая'),
   type: nullable('string', 'Вид чая: Шэн пуэр, Шу пуэр, Улун, Красный, Зелёный, Белый и т.п.'),
   country: nullable('string', 'Страна происхождения'),
@@ -194,6 +220,9 @@ const systemPrompt = (aromaTree, tasteTree) => `Ты помогаешь запо
 4. В description каждого пролива — короткое описание впечатления словами говорящего.
 5. Ароматы и вкусы указывай ТОЛЬКО путями из справочников ниже, через " → ". Разрешён неполный путь ("Древесный" или "Древесный → Кора").
 6. Если для прозвучавшего оттенка подходящего пути в справочнике НЕТ — не выдумывай путь, а обязательно опиши этот оттенок словами в description этого пролива. Ни один названный оттенок не должен потеряться.
+7. Не используй категорию «Другое»: она ничего не сообщает. Нет подходящего пути — пиши словами в description.
+8. Не указывай одновременно категорию и её подкатегорию: «Овощной → Томат» уже включает «Овощной».
+9. Если запись вообще не о дегустации чая (разговор, список дел, что угодно другое) — верни isTeaTasting: false, в topic коротко напиши, о чём запись, а все остальные поля оставь пустыми и brewings пустым массивом. Лучше честно ничего не заполнить, чем выдумать.
 
 Числа легко перепутать, поэтому отдельно:
 - weight — сколько грамм СУХОГО ЛИСТА положили в чайник для этой дегустации (обычно 4–10 г). Это НЕ вес купленной упаковки.
@@ -229,6 +258,20 @@ const extractFromTranscript = async (transcript) => {
     data = JSON.parse(answer.text);
   } catch (err) {
     return { ok: false, reason: 'Модель вернула не JSON.' };
+  }
+
+  // Nothing is offered rather than a form filled from the wrong material. The
+  // transcript is still kept — it is the user's recording either way.
+  if (data.isTeaTasting === false) {
+    return {
+      ok: true,
+      offTopic: true,
+      topic: (data.topic || '').trim(),
+      data: { brewings: [] },
+      droppedPaths: [],
+      usage: answer.usage,
+      modelVersion: answer.modelVersion,
+    };
   }
 
   const droppedPaths = [];

@@ -363,6 +363,44 @@ module.exports.getVoiceStatus = (req, res, next) => {
     });
 };
 
+// Re-runs recognition after a failure. Recognition talks to a third-party
+// service over the network, so "fetch failed" is a normal transient outcome —
+// without this the form is stuck in `error` for good and the recording is
+// effectively lost, even though the audio is sitting safely on disk.
+module.exports.retryVoice = (req, res, next) => {
+  TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
+    .select("voice")
+    .orFail(() => {
+      const e = new Error("404 — Запись не найдена.");
+      e.statusCode = 404;
+      return e;
+    })
+    .then((form) => {
+      const segments = (form.voice && form.voice.segments) || [];
+      if (!segments.length) {
+        const e = new Error("У этой дегустации нет записей.");
+        e.statusCode = 409;
+        throw e;
+      }
+
+      // Reset to "queued" and let the ordinary job path do the work: it re-merges
+      // from the segments, so a track lost to a half-finished run is rebuilt too.
+      return TeaForm.updateOne(
+        { owner: req.user._id, sessionId: req.params.sessionId },
+        { "voice.status": "queued", "voice.error": "", "voice.operationId": "" }
+      ).then(() => {
+        enqueue(req.user._id, req.params.sessionId);
+        res.send({ data: { status: "queued" } });
+      });
+    })
+    .catch((err) => {
+      if (err.statusCode) return next(err);
+      const e = new Error("500 — Ошибка по умолчанию.");
+      e.statusCode = 500;
+      return next(e);
+    });
+};
+
 // Turns the transcript into field suggestions. Deliberately does NOT write the
 // form: the user confirms field by field, so a confident-but-wrong extraction
 // costs a rejected suggestion rather than overwritten data.
@@ -384,6 +422,8 @@ module.exports.extractFromVoice = (req, res, next) => {
         res.send({
           data: voice.extraction.data,
           droppedPaths: voice.extraction.droppedPaths || [],
+          offTopic: Boolean(voice.extraction.offTopic),
+          topic: voice.extraction.topic || "",
           cached: true,
           extractedAt: voice.extractedAt,
         });
@@ -404,7 +444,12 @@ module.exports.extractFromVoice = (req, res, next) => {
           throw e;
         }
 
-        const stored = { data: result.data, droppedPaths: result.droppedPaths };
+        const stored = {
+          data: result.data,
+          droppedPaths: result.droppedPaths,
+          offTopic: Boolean(result.offTopic),
+          topic: result.topic || "",
+        };
         // Saved before responding: if the write fails the client would otherwise
         // believe the result is cached and never be able to ask again.
         return TeaForm.updateOne(

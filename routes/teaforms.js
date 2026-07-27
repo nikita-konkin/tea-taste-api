@@ -11,6 +11,7 @@ const {
   getPublicTeaFormById,
   getVoiceStatus,
   extractFromVoice,
+  retryVoice,
 } = require("../controllers/teaforms");
 
 // Shared by the photo and voice URLs. Anchored, with a required extension:
@@ -97,6 +98,11 @@ privateRouter.get("/my-form/:sessionId/voice", celebrate({
     sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 }), getVoiceStatus);
+privateRouter.post("/my-form/:sessionId/voice/retry", celebrate({
+  params: Joi.object().keys({
+    sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
+  }),
+}), retryVoice);
 privateRouter.post("/my-form/:sessionId/extract", celebrate({
   params: Joi.object().keys({
     sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
