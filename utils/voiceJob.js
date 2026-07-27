@@ -80,6 +80,10 @@ const transcribe = async (owner, sessionId, trackPath) => {
     status: 'done',
     operationId: '',
     error: '',
+    // A new transcript invalidates the stored YandexGPT result — otherwise the
+    // form would keep offering suggestions drawn from audio that no longer exists.
+    extraction: null,
+    extractedAt: null,
   });
   return speechkit.cleanup(submitted.operationId);
 };

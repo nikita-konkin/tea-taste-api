@@ -77,12 +77,36 @@ describe('tea form CRUD', () => {
     expect(res.status).toBe(400);
   });
 
-  test('POST /create-form with a missing required field -> 400', async () => {
-    const { nameRU, ...incomplete } = formBody;
+  // Fields used to be required, and this asserted the 400. They are optional now
+  // on purpose: a tasting is often recorded before it can be typed up, and the
+  // wizard gates on "a name or a recording" instead. What still has to fail is a
+  // value that is present but wrong — otherwise removing .required() would have
+  // quietly removed the validation as well.
+  test('POST /create-form accepts a form with fields left out', async () => {
+    const SID_PARTIAL = '9c1e7a52-3b44-4c11-9d0e-77aa11bb22cc';
+    const res = await request(app)
+      .post(`/create-form/${SID_PARTIAL}`)
+      .set('Cookie', cookieA)
+      .send({ nameRU: 'Только название' });
+    expect(res.status).toBe(200);
+
+    const stored = await request(app).get(`/my-form/${SID_PARTIAL}`).set('Cookie', cookieA);
+    expect(stored.body.data[0].nameRU).toBe('Только название');
+    expect(stored.body.data[0].country).toBeUndefined();
+
+    await request(app).delete(`/my-form/${SID_PARTIAL}`).set('Cookie', cookieA);
+  });
+
+  test.each([
+    ['a name below the minimum length', { nameRU: 'я' }],
+    ['a non-numeric weight', { weight: 'много' }],
+    ['a rating above the maximum', { averageRating: 11 }],
+    ['an unknown field', { nonsense: 1 }],
+  ])('POST /create-form still rejects %s', async (_label, patch) => {
     const res = await request(app)
       .post(`/create-form/${SID}`)
       .set('Cookie', cookieA)
-      .send(incomplete);
+      .send({ ...formBody, ...patch });
     expect(res.status).toBe(400);
   });
 });

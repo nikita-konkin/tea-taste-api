@@ -122,6 +122,11 @@ const userSchema = new mongoose.Schema(
       },
       operationId: { type: String },
       error: { type: String },
+      // The YandexGPT result, kept so the same transcript is never billed twice.
+      // Mixed because it mirrors the extraction schema, which is free to grow
+      // without a migration here. Cleared whenever the transcript changes.
+      extraction: { type: mongoose.Schema.Types.Mixed },
+      extractedAt: { type: Date },
     },
 
     owner: {

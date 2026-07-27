@@ -2,6 +2,9 @@ const path = require("path");
 const fs = require("fs");
 
 const TeaForm = require("../models/teaform");
+const Brewing = require("../models/brewing");
+const Aroma = require("../models/aroma");
+const Taste = require("../models/taste");
 const { delBySessionID } = require("../utils/delAllDocsFromCollection");
 const { getTeaDataBySessionIdAndOwner } = require("../utils/getTeaDataBy")
 const { uploadDir } = require("../middlewares/upload");
@@ -46,6 +49,21 @@ module.exports.createTeaForm = (req, res, next) => {
   const sessionId = req.params.sessionId;
   // const brewingCount = req.params.brewId;
 
+  // A tasting saved from a recording alone has no name yet — the transcript has
+  // it, but that arrives a minute later. Without this the card renders a blank
+  // title. Derived server-side so it is a real stored value the extraction can
+  // overwrite, not a display-time placeholder that every view has to know about.
+  //
+  // Month names are spelled out rather than left to toLocaleDateString: the
+  // alpine image ships a small-ICU node, which would quietly answer in English.
+  const MONTHS_RU = [
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+  ];
+  const today = new Date();
+  const title = (nameRU || "").trim()
+    || `Дегустация ${today.getDate()} ${MONTHS_RU[today.getMonth()]}`;
+
   const segments = clientSegments(voice);
   // "queued" is what the transcription job looks for; with no recordings the
   // key is omitted entirely and the model's own default applies.
@@ -65,7 +83,7 @@ module.exports.createTeaForm = (req, res, next) => {
     },
     {
       $setOnInsert: {
-        nameRU: nameRU,
+        nameRU: title,
         country: country,
         shop: shop,
         type: type,
@@ -268,6 +286,8 @@ module.exports.patchTeaForm = (req, res, next) => {
       update["voice.transcript"] = "";
       update["voice.operationId"] = "";
       update["voice.track"] = { url: "", duration: 0 };
+      update["voice.extraction"] = null;
+      update["voice.extractedAt"] = null;
     }
   }
 
@@ -279,7 +299,20 @@ module.exports.patchTeaForm = (req, res, next) => {
     update,
     {new : true}
     )
-    .then((form) => {
+    .then(async (form) => {
+      // publicAccess is duplicated onto every brewing, aroma and taste, and the
+      // public endpoints filter on each document's own copy. Updating only the
+      // teaform published the tasting while leaving its проливы invisible —
+      // reachable for any recording, since those are forced private at creation
+      // and therefore always published by a later toggle.
+      if (typeof publicAccess === "boolean") {
+        await Promise.all([
+          Brewing.updateMany({ owner, sessionId }, { publicAccess }),
+          Aroma.updateMany({ owner, sessionId }, { publicAccess }),
+          Taste.updateMany({ owner, sessionId }, { publicAccess }),
+        ]).catch(() => {});
+      }
+
       if (segments && segments.length) enqueue(owner, sessionId);
       return res.send({
         data: form,
@@ -342,21 +375,43 @@ module.exports.extractFromVoice = (req, res, next) => {
       return e;
     })
     .then((form) => {
-      const transcript = (form.voice && form.voice.transcript) || "";
-      if (!transcript.trim()) {
+      const voice = form.voice || {};
+
+      // Already extracted: answer from storage. The transcript has not changed,
+      // so a second call to YandexGPT would be billed for an identical question
+      // and could even come back slightly different.
+      if (voice.extraction && voice.extraction.data) {
+        res.send({
+          data: voice.extraction.data,
+          droppedPaths: voice.extraction.droppedPaths || [],
+          cached: true,
+          extractedAt: voice.extractedAt,
+        });
+        return null;
+      }
+
+      const transcript = (voice.transcript || "").trim();
+      if (!transcript) {
         const e = new Error("Расшифровка ещё не готова.");
         e.statusCode = 409;
         throw e;
       }
-      return extractFromTranscript(transcript);
-    })
-    .then((result) => {
-      if (!result.ok) {
-        const e = new Error(result.reason);
-        e.statusCode = 502;
-        throw e;
-      }
-      res.send({ data: result.data, droppedPaths: result.droppedPaths });
+
+      return extractFromTranscript(transcript).then((result) => {
+        if (!result.ok) {
+          const e = new Error(result.reason);
+          e.statusCode = 502;
+          throw e;
+        }
+
+        const stored = { data: result.data, droppedPaths: result.droppedPaths };
+        // Saved before responding: if the write fails the client would otherwise
+        // believe the result is cached and never be able to ask again.
+        return TeaForm.updateOne(
+          { owner: req.user._id, sessionId: req.params.sessionId },
+          { "voice.extraction": stored, "voice.extractedAt": new Date() }
+        ).then(() => res.send({ ...stored, cached: false }));
+      });
     })
     .catch((err) => {
       if (err.statusCode) return next(err);

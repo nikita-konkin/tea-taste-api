@@ -19,19 +19,28 @@ const UPLOAD_URL = /^\/api\/uploads\/[A-Za-z0-9_-]+\.[A-Za-z0-9]{2,5}$/;
 
 const teaFormValidation = celebrate({
   body: Joi.object().keys({
-    nameRU: Joi.string().min(2).max(60).required(),
-    country: Joi.string().min(2).max(60).required(),
-    shop: Joi.string().min(2).max(60).required(),
-    type: Joi.string().min(2).max(60).required(),
-    weight: Joi.number().integer().required(),
-    water: Joi.string().min(2).max(60).required(),
-    volume: Joi.number().integer().required(),
-    temperature: Joi.number().integer().required(),
-    price: Joi.number().precision(4).required(),
-    teaware: Joi.string().min(2).max(60).required(),
-    brewingtype: Joi.string().min(2).max(60).required(),
-    publicAccess: Joi.boolean().required(),
-    averageRating: Joi.number().min(1).max(10).precision(2).required(),
+    // Nothing here is required any more. A tasting is often recorded before it
+    // can be typed up — that is the whole point of the voice notes — so demanding
+    // twelve complete fields at creation contradicted the feature. What is
+    // actually needed to save is enforced in the wizard: a name, or a recording
+    // to derive one from later.
+    //
+    // The mongoose schema still marks several of these required, which is
+    // decorative on this path: createTeaForm writes through updateMany/upsert and
+    // patchTeaForm through findOneAndUpdate, and neither runs validators.
+    nameRU: Joi.string().min(2).max(60),
+    country: Joi.string().min(2).max(60).allow(''),
+    shop: Joi.string().min(2).max(60).allow(''),
+    type: Joi.string().min(2).max(60).allow(''),
+    weight: Joi.number().integer(),
+    water: Joi.string().min(2).max(60).allow(''),
+    volume: Joi.number().integer(),
+    temperature: Joi.number().integer(),
+    price: Joi.number().precision(4),
+    teaware: Joi.string().min(2).max(60).allow(''),
+    brewingtype: Joi.string().min(2).max(60).allow(''),
+    publicAccess: Joi.boolean(),
+    averageRating: Joi.number().min(1).max(10).precision(2),
     // Optional so existing clients that omit it keep working, and explicitly
     // without .default([]) — celebrate replaces req.body with Joi's output, so
     // a default would wipe the stored photos on every PATCH that omits the key.
