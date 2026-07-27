@@ -40,14 +40,62 @@ const validPaths = (tree) => {
 // A JSON schema constrains the shape but cannot enumerate a tree this size, so
 // the model can return a plausible path that does not exist. Anything unknown is
 // dropped rather than passed on to a picker that would fail to resolve it.
+// Speech, the model and the dictionary spell things differently: «Спиртовой
+// оттенок» against «Спиртовой», «ё» against «е», stray punctuation. Comparing
+// letters and digits only makes those the same word.
+const norm = (text) => String(text || '')
+  .toLowerCase()
+  .replace(/ё/g, 'е')
+  .replace(/[^a-zа-я0-9]+/gi, '');
+
+// Two lookups over the vocabulary: the whole path, and each path's final
+// segment. The second is what rescues a near-miss — the model reliably names the
+// right descriptor and guesses the wrong branch above it.
+const buildIndex = (known) => {
+  const byPath = new Map();
+  const byLeaf = new Map();
+  known.forEach((path) => {
+    byPath.set(norm(path), path);
+    const leaf = norm(path.split(SEP).pop());
+    // First writer wins, so the answer for a given word never depends on Set
+    // iteration order.
+    if (leaf && !byLeaf.has(leaf)) byLeaf.set(leaf, path);
+  });
+  return { byPath, byLeaf };
+};
+
+// Resolves whatever the model produced to a real entry rather than only
+// accepting an exact hit. A descriptor that lands in the wrong category is worth
+// keeping — the word was genuinely said out loud — and the vocabulary decides
+// where it belongs.
+const resolvePath = (raw, index) => {
+  const path = String(raw).replace(/\s*(→|->|\/|>)\s*/g, SEP).trim();
+  if (!path) return null;
+
+  const exact = index.byPath.get(norm(path));
+  if (exact) return exact;
+
+  // Deepest segment first: it carries the most meaning, and the branch above it
+  // is what the model tends to get wrong.
+  const segments = path.split(SEP).map((s) => s.trim()).filter(Boolean).reverse();
+  for (const segment of segments) {
+    const hit = index.byLeaf.get(norm(segment));
+    if (hit) return hit;
+  }
+  return null;
+};
+
 const keepKnown = (paths, known) => {
+  const index = buildIndex(known);
   const kept = [];
   const dropped = [];
+
   (paths || []).forEach((raw) => {
-    const path = String(raw).replace(/\s*(→|->|\/|>)\s*/g, SEP).trim();
-    if (known.has(path)) kept.push(path);
-    else dropped.push(raw);
+    const resolved = resolvePath(raw, index);
+    if (resolved && !kept.includes(resolved)) kept.push(resolved);
+    else if (!resolved) dropped.push(raw);
   });
+
   return { kept, dropped };
 };
 
@@ -111,8 +159,13 @@ const withUnmatched = (description, dropped) => {
     .filter((word) => word && !lower.includes(word.toLowerCase())))];
 
   if (!missing.length) return text;
+
   const tail = `Также прозвучало: ${missing.join(', ')}.`;
-  return text ? `${text} ${tail}` : tail;
+  if (!text) return tail;
+  // The model rarely ends its description with punctuation, so without this the
+  // two run together: «вкус стал более молочный Также прозвучало: …».
+  const separator = /[.!?…]$/.test(text) ? ' ' : '. ';
+  return `${text}${separator}${tail}`;
 };
 
 const FORM_SCHEMA = {
