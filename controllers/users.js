@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/user');
+const { MONTHLY_LIMIT_SECONDS, currentPeriod } = require('../utils/voiceQuota');
+const { MAX_TRACK_SECONDS } = require('../utils/audio');
 
 module.exports.getUserById = (req, res, next) => {
   User.findById(req.user._id)
@@ -9,8 +11,22 @@ module.exports.getUserById = (req, res, next) => {
       return e;
     })
     .then((user) => {
+      // The allowance is enforced server-side and silently, at the moment a
+      // recording is sent off — so the only way a user can find out where they
+      // stand before recording is to be told here. Same "old period reads as
+      // zero" rule the quota check itself applies.
+      const period = currentPeriod();
+      const usedSeconds = user.voicePeriod === period ? (user.voiceSeconds || 0) : 0;
+
       res.send({
         data: user,
+        voiceQuota: {
+          usedSeconds,
+          leftSeconds: Math.max(0, MONTHLY_LIMIT_SECONDS - usedSeconds),
+          limitSeconds: MONTHLY_LIMIT_SECONDS,
+          maxTrackSeconds: MAX_TRACK_SECONDS,
+          period,
+        },
       });
     })
     .catch((err) => {
@@ -31,6 +47,7 @@ module.exports.getUserById = (req, res, next) => {
 module.exports.updateUserProfile = (req, res, next) => {
   const {
     name,
+    nickname,
     email,
     career,
     about,
@@ -41,7 +58,7 @@ module.exports.updateUserProfile = (req, res, next) => {
   // an empty string clears the (optional) field.
   const update = {};
   const unset = {};
-  Object.entries({ name, email, career, about, avatar }).forEach(([key, value]) => {
+  Object.entries({ name, nickname, email, career, about, avatar }).forEach(([key, value]) => {
     if (value === '' && key !== 'name' && key !== 'email') {
       unset[key] = 1;
     } else if (value !== undefined) {
@@ -66,7 +83,12 @@ module.exports.updateUserProfile = (req, res, next) => {
         e.statusCode = 400;
         next(e);
       } else if (err.code === 11000) {
-        const e = new Error('409 — Данный пользователь уже существует');
+        // Two unique fields now, and "пользователь уже существует" is unhelpful
+        // when what actually collided is a nickname someone else has taken.
+        const collided = Object.keys(err.keyPattern || err.keyValue || {})[0];
+        const e = new Error(collided === 'nickname'
+          ? '409 — Этот никнейм уже занят.'
+          : '409 — Данный пользователь уже существует');
         e.statusCode = 409;
         next(e);
       } else {

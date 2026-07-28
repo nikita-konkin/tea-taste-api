@@ -7,6 +7,20 @@ const userSchema = new mongoose.Schema({
     minlength: 2,
     maxlength: 30,
   },
+  // Public display handle, shown instead of `name` wherever a tasting is
+  // attributed. Unique so it cannot be used to pass for someone else; sparse
+  // so the many accounts without one do not collide on a missing value —
+  // which is why the profile controller $unsets an empty nickname rather than
+  // storing ''.
+  nickname: {
+    type: String,
+    required: false,
+    minlength: 2,
+    maxlength: 30,
+    unique: true,
+    sparse: true,
+    trim: true,
+  },
   email: {
     type: String,
     required: true,

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
+const { isRegistrationOpen, REGISTRATION_CLOSED_MESSAGE } = require('../utils/settings');
 
 const { NODE_ENV, JWT_SECRET } = process.env;
 
@@ -40,11 +41,23 @@ module.exports.loginUser = (req, res, next) => {
 module.exports.createUser = (req, res, next) => {
   const { name, email, password } = req.body;
 
-  bcrypt.hash(password, 10)
+  // Checked before the hash: bcrypt is the expensive part of this handler, and
+  // a closed door is usually closed because something is hammering it.
+  isRegistrationOpen()
+    .then((open) => {
+      if (!open) {
+        const e = new Error(REGISTRATION_CLOSED_MESSAGE);
+        e.statusCode = 403;
+        throw e;
+      }
+      return bcrypt.hash(password, 10);
+    })
     .then((hash) => User.create({ name, email, password: hash }))
     .then(() => res.send({ data: { name, email } }))
     .catch((err) => {
-      if (err.name === 'ValidationError') {
+      if (err.statusCode) {
+        return next({ message: err.message, statusCode: err.statusCode });
+      } else if (err.name === 'ValidationError') {
         return next({ message: 'Переданы некорректные данные при создании карточки.', statusCode: 400 });
       } else if (err.code === 11000) {
         return next({ message: 'Пользователь уже зарегистрирован по данному email.', statusCode: 409 });

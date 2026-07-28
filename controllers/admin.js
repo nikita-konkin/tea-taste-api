@@ -3,6 +3,8 @@ const Teaform = require('../models/teaform');
 const Brewing = require('../models/brewing');
 const Aroma = require('../models/aroma');
 const Taste = require('../models/taste');
+const { MONTHLY_LIMIT_SECONDS, currentPeriod } = require('../utils/voiceQuota');
+const { getSettings, updateSettings } = require('../utils/settings');
 
 const fail = (next, statusCode, message) => next({ message, statusCode });
 
@@ -14,11 +16,18 @@ module.exports.getUsers = async (req, res, next) => {
       Teaform.aggregate([{ $group: { _id: '$owner', forms: { $sum: 1 } } }]),
     ]);
     const formsByOwner = Object.fromEntries(counts.map((c) => [String(c._id), c.forms]));
+    const period = currentPeriod();
 
     res.send({
+      // The monthly allowance is spent against the service owner's SpeechKit
+      // bill, so it is reported alongside the accounts rather than left to be
+      // read out of the database by hand when something looks expensive.
+      voiceLimitSeconds: MONTHLY_LIMIT_SECONDS,
+      voicePeriod: period,
       data: users.map((u) => ({
         _id: u._id,
         name: u.name,
+        nickname: u.nickname,
         email: u.email,
         career: u.career,
         avatar: u.avatar,
@@ -26,11 +35,42 @@ module.exports.getUsers = async (req, res, next) => {
         role: u.role || 'user',
         createdAt: u.createdAt,
         forms: formsByOwner[String(u._id)] || 0,
+        // voiceSeconds is only meaningful within its own period; a counter left
+        // over from an earlier month has already been forgiven, so it reads 0
+        // here exactly as it does to the quota check itself.
+        voiceSeconds: u.voicePeriod === period ? (u.voiceSeconds || 0) : 0,
       })),
     });
   } catch (err) {
     console.error('admin getUsers failed:', err);
     fail(next, 500, 'Ошибка по умолчанию.');
+  }
+};
+
+// GET /admin/settings — the whole switchboard, admin-only.
+module.exports.getAppSettings = async (req, res, next) => {
+  try {
+    const settings = await getSettings();
+    return res.send({ data: { registrationOpen: settings.registrationOpen } });
+  } catch (err) {
+    console.error('admin getAppSettings failed:', err);
+    return fail(next, 500, 'Ошибка по умолчанию.');
+  }
+};
+
+// PATCH /admin/settings — flip a switch. Sent one key at a time, so an admin
+// page that predates a new setting cannot reset it by echoing back a stale copy.
+module.exports.updateAppSettings = async (req, res, next) => {
+  try {
+    const patch = {};
+    if (typeof req.body.registrationOpen === 'boolean') {
+      patch.registrationOpen = req.body.registrationOpen;
+    }
+    const settings = await updateSettings(patch);
+    return res.send({ data: { registrationOpen: settings.registrationOpen } });
+  } catch (err) {
+    console.error('admin updateAppSettings failed:', err);
+    return fail(next, 500, 'Ошибка по умолчанию.');
   }
 };
 

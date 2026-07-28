@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../app');
 const db = require('./db');
+const Setting = require('../models/setting');
 
 const user = { name: 'Тестер', email: 'auth-test@example.com', password: 'Abc1!xyz' };
 
@@ -45,6 +46,60 @@ describe('registration and login', () => {
       .send({ email: user.email, password: user.password });
     expect(res.status).toBe(200);
     expect(res.headers['set-cookie'].join(';')).toMatch(/jwt=/);
+  });
+});
+
+describe('the registration kill switch', () => {
+  afterEach(async () => {
+    await Setting.deleteMany({});
+  });
+
+  test('GET /settings reports registration open by default', async () => {
+    const res = await request(app).get('/settings');
+    expect(res.status).toBe(200);
+    expect(res.body.data.registrationOpen).toBe(true);
+  });
+
+  test('with registration closed, POST /sign-up -> 403 and no user is created', async () => {
+    await Setting.create({ key: 'app', registrationOpen: false });
+
+    const res = await request(app)
+      .post('/sign-up')
+      .send({ name: 'Незваный', email: 'closed@example.com', password: 'Abc1!xyz' });
+    expect(res.status).toBe(403);
+
+    // The door being shut must actually stop the write, not just the response.
+    const login = await request(app)
+      .post('/sign-in')
+      .send({ email: 'closed@example.com', password: 'Abc1!xyz' });
+    expect(login.status).toBe(401);
+  });
+
+  test('closing registration does not lock out existing accounts', async () => {
+    await Setting.create({ key: 'app', registrationOpen: false });
+
+    const res = await request(app)
+      .post('/sign-in')
+      .send({ email: user.email, password: user.password });
+    expect(res.status).toBe(200);
+  });
+
+  test('GET /settings reflects the closed state, without auth', async () => {
+    await Setting.create({ key: 'app', registrationOpen: false });
+
+    const res = await request(app).get('/settings');
+    expect(res.status).toBe(200);
+    expect(res.body.data.registrationOpen).toBe(false);
+  });
+
+  test('reopening lets sign-up through again', async () => {
+    await Setting.create({ key: 'app', registrationOpen: false });
+    await Setting.updateOne({ key: 'app' }, { registrationOpen: true });
+
+    const res = await request(app)
+      .post('/sign-up')
+      .send({ name: 'Снова', email: 'reopened@example.com', password: 'Abc1!xyz' });
+    expect(res.status).toBe(200);
   });
 });
 

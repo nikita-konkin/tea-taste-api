@@ -18,7 +18,7 @@ module.exports.getSuggestions = (req, res, next) => {
   Suggestion.find({})
     .sort({ createdAt: -1 })
     .limit(500)
-    .populate('owner', 'name email avatar')
+    .populate('owner', 'name nickname email avatar')
     .then((items) => res.send({ data: items }))
     .catch((err) => {
       console.error('getSuggestions failed:', err);

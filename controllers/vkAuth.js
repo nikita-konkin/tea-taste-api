@@ -5,6 +5,7 @@ const User = require('../models/user');
 const {
   newPkce, authorizeUrl, exchangeCode, fetchUserInfo,
 } = require('../utils/vkid');
+const { isRegistrationOpen } = require('../utils/settings');
 
 const STATE_COOKIE_MS = 10 * 60 * 1000;
 
@@ -86,6 +87,13 @@ module.exports.vkCallback = async (req, res) => {
       user = await User.findOneAndUpdate({ email }, { vkId }, { new: true });
     }
     if (!user) {
+      // Closing registration has to close this door too, or the switch only
+      // stops the half of sign-ups that go through the form. Accounts that
+      // already exist — matched by vkId or linked by email above — still get in.
+      if (!await isRegistrationOpen()) {
+        return res.redirect(`${frontendBase()}/sign-in?vk_error=closed`);
+      }
+
       // VK-only account: satisfy the required password with a random one
       // (the user can always set a real one via password reset).
       const randomPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);

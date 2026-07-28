@@ -18,6 +18,8 @@ const {
 
 const { startVkAuth, vkCallback } = require('../controllers/vkAuth');
 
+const { getSettings } = require('../utils/settings');
+
 // Define the Joi schema
 
 
@@ -62,6 +64,15 @@ createUser
 );
 
 router.post('/sign-out', logoutUser);
+
+// Unauthenticated on purpose: the sign-up page has to know whether to offer a
+// form before anyone has an account. Only the switches the page needs are
+// exposed — never the whole settings document.
+router.get('/settings', (req, res, next) => {
+  getSettings()
+    .then((settings) => res.send({ data: { registrationOpen: settings.registrationOpen } }))
+    .catch(() => next({ message: 'Ошибка по умолчанию.', statusCode: 500 }));
+});
 
 router.get('/auth/vk', startVkAuth);
 router.get('/auth/vk/callback', vkCallback);

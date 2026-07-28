@@ -172,7 +172,7 @@ module.exports.getPublicTeaForms = async (req, res, next) => {
         .sort(sort)
         .skip((page - 1) * limit)
         .limit(limit)
-        .populate('owner', 'name avatar'),
+        .populate('owner', 'name nickname avatar'),
     ]);
 
     res.send({
@@ -197,7 +197,7 @@ module.exports.getPublicTeaForms = async (req, res, next) => {
 // One public form by sessionId (shareable /blog/:sessionId pages).
 module.exports.getPublicTeaFormById = (req, res, next) => {
   TeaForm.findOne({ sessionId: req.params.sessionId, publicAccess: true })
-    .populate('owner', 'name avatar')
+    .populate('owner', 'name nickname avatar')
     .orFail(() => {
       const e = new Error('404 — Запись не найдена.');
       e.statusCode = 404;

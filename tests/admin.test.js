@@ -5,6 +5,8 @@ const request = require('supertest');
 const app = require('../app');
 const User = require('../models/user');
 const Teaform = require('../models/teaform');
+const Setting = require('../models/setting');
+const { MONTHLY_LIMIT_SECONDS, currentPeriod } = require('../utils/voiceQuota');
 
 const mdbAddr = process.env.API_MONGO_URI || 'mongodb://localhost:27017/tea-taste-test';
 
@@ -22,6 +24,7 @@ beforeAll(async () => {
   await mongoose.connect(mdbAddr);
   await User.deleteMany({});
   await Teaform.deleteMany({});
+  await Setting.deleteMany({});
 
   adminCookie = await signUpAndIn('Admin', 'admin@example.com');
   userCookie = await signUpAndIn('Plain', 'plain@example.com');
@@ -32,6 +35,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await User.deleteMany({});
   await Teaform.deleteMany({});
+  await Setting.deleteMany({});
   await mongoose.connection.close();
 });
 
@@ -65,6 +69,76 @@ describe('GET /admin/users', () => {
     const plain = res.body.data.find((u) => u.email === 'plain@example.com');
     expect(plain.role).toBe('user');
     expect(plain.forms).toBe(1);
+  });
+});
+
+describe('voice transcription quota', () => {
+  test('reports each user\'s used seconds against the monthly limit', async () => {
+    await User.updateOne(
+      { _id: plainUser._id },
+      { voiceSeconds: 750, voicePeriod: currentPeriod() },
+    );
+
+    const res = await request(app).get('/admin/users').set('Cookie', adminCookie);
+    expect(res.status).toBe(200);
+    expect(res.body.voiceLimitSeconds).toBe(MONTHLY_LIMIT_SECONDS);
+    expect(res.body.voicePeriod).toBe(currentPeriod());
+
+    const plain = res.body.data.find((u) => u.email === 'plain@example.com');
+    expect(plain.voiceSeconds).toBe(750);
+  });
+
+  test('a counter left over from an earlier month reads as 0', async () => {
+    await User.updateOne(
+      { _id: plainUser._id },
+      { voiceSeconds: 1800, voicePeriod: '2000-01' },
+    );
+
+    const res = await request(app).get('/admin/users').set('Cookie', adminCookie);
+    const plain = res.body.data.find((u) => u.email === 'plain@example.com');
+    // The quota check itself forgives an old period; the console must agree,
+    // or an admin reads "limit spent" for someone who has their full month.
+    expect(plain.voiceSeconds).toBe(0);
+  });
+});
+
+describe('/admin/settings', () => {
+  afterEach(async () => {
+    await Setting.deleteMany({});
+  });
+
+  test('a regular user cannot read or change settings', async () => {
+    const read = await request(app).get('/admin/settings').set('Cookie', userCookie);
+    expect(read.status).toBe(403);
+
+    const write = await request(app)
+      .patch('/admin/settings').set('Cookie', userCookie)
+      .send({ registrationOpen: false });
+    expect(write.status).toBe(403);
+  });
+
+  test('defaults to open, and the toggle closes sign-up end to end', async () => {
+    const before = await request(app).get('/admin/settings').set('Cookie', adminCookie);
+    expect(before.status).toBe(200);
+    expect(before.body.data.registrationOpen).toBe(true);
+
+    const closed = await request(app)
+      .patch('/admin/settings').set('Cookie', adminCookie)
+      .send({ registrationOpen: false });
+    expect(closed.status).toBe(200);
+    expect(closed.body.data.registrationOpen).toBe(false);
+
+    const signUp = await request(app)
+      .post('/sign-up')
+      .send({ name: 'Поздно', email: 'late@example.com', password: 'Passw0rd!' });
+    expect(signUp.status).toBe(403);
+  });
+
+  test('a non-boolean value -> 400', async () => {
+    const res = await request(app)
+      .patch('/admin/settings').set('Cookie', adminCookie)
+      .send({ registrationOpen: 'нет' });
+    expect(res.status).toBe(400);
   });
 });
 

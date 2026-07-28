@@ -2,7 +2,9 @@ const privateRouter = require('express').Router();
 const { celebrate, Joi, Segments } = require('celebrate');
 
 const adminOnly = require('../middlewares/adminOnly');
-const { getUsers, setUserRole, deleteUser } = require('../controllers/admin');
+const {
+  getUsers, setUserRole, deleteUser, getAppSettings, updateAppSettings,
+} = require('../controllers/admin');
 const { getSuggestions, deleteSuggestion } = require('../controllers/suggestions');
 
 privateRouter.use('/admin', adminOnly);
@@ -23,6 +25,14 @@ privateRouter.delete('/admin/users/:id', celebrate({
     id: Joi.string().hex().length(24).required(),
   }),
 }), deleteUser);
+
+privateRouter.get('/admin/settings', getAppSettings);
+
+privateRouter.patch('/admin/settings', celebrate({
+  [Segments.BODY]: Joi.object().keys({
+    registrationOpen: Joi.boolean(),
+  }).min(1),
+}), updateAppSettings);
 
 privateRouter.get('/admin/suggestions', getSuggestions);
 
