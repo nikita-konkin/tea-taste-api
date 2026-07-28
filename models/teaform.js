@@ -64,6 +64,22 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       required: true,
     },
+
+    // Moderation. Deliberately NOT the same field as publicAccess: that one is
+    // the owner's own switch, so a block expressed through it would be undone by
+    // the next tap on «Публикация в блоге». While this is true the tasting is
+    // out of the feed and the owner cannot put it back — only an admin can.
+    blocked: {
+      type: Boolean,
+      default: false,
+    },
+    blockedAt: {
+      type: Date,
+    },
+    blockedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "user",
+    },
     averageRating: {
       type: Number,
       required: false,

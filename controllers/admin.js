@@ -5,6 +5,7 @@ const Aroma = require('../models/aroma');
 const Taste = require('../models/taste');
 const { MONTHLY_LIMIT_SECONDS, currentPeriod } = require('../utils/voiceQuota');
 const { getSettings, updateSettings } = require('../utils/settings');
+const { unlinkFormFiles, formFileUrls } = require('./teaforms');
 
 const fail = (next, statusCode, message) => next({ message, statusCode });
 
@@ -70,6 +71,120 @@ module.exports.updateAppSettings = async (req, res, next) => {
     return res.send({ data: { registrationOpen: settings.registrationOpen } });
   } catch (err) {
     console.error('admin updateAppSettings failed:', err);
+    return fail(next, 500, 'Ошибка по умолчанию.');
+  }
+};
+
+// GET /admin/forms?blocked=true — the moderation queue. Blocked tastings are
+// gone from the feed, so this list is the only way back to them: without it a
+// block would be as irreversible as a delete.
+module.exports.getForms = async (req, res, next) => {
+  try {
+    const filter = req.query.blocked === 'true' ? { blocked: true } : {};
+
+    const forms = await Teaform.find(filter)
+      .sort({ blockedAt: -1, createdAt: -1 })
+      .limit(200)
+      .select('sessionId nameRU type createdAt publicAccess blocked blockedAt owner')
+      .populate('owner', 'name nickname email');
+
+    return res.send({
+      data: forms.map((form) => ({
+        sessionId: form.sessionId,
+        nameRU: form.nameRU,
+        type: form.type,
+        createdAt: form.createdAt,
+        publicAccess: form.publicAccess,
+        blocked: Boolean(form.blocked),
+        blockedAt: form.blockedAt,
+        owner: form.owner
+          ? {
+            _id: form.owner._id,
+            name: form.owner.name,
+            nickname: form.owner.nickname,
+            email: form.owner.email,
+          }
+          : null,
+      })),
+    });
+  } catch (err) {
+    console.error('admin getForms failed:', err);
+    return fail(next, 500, 'Ошибка по умолчанию.');
+  }
+};
+
+// PATCH /admin/forms/:sessionId/block — take a tasting out of the feed, or put
+// it back within reach of its owner.
+//
+// Blocking also clears publicAccess on the tasting and on every brewing, aroma
+// and taste: the public sub-resource endpoints filter on each document's own
+// copy, so leaving those true would keep the проливы of a blocked tasting
+// readable at /public-brewings/:sessionId. Unblocking does NOT republish — the
+// owner decides that, and a moderated post should not silently reappear.
+module.exports.setFormBlocked = async (req, res, next) => {
+  const { sessionId } = req.params;
+  const { blocked } = req.body;
+
+  try {
+    const form = await Teaform.findOne({ sessionId });
+    if (!form) return fail(next, 404, 'Запись не найдена.');
+
+    const patch = blocked
+      ? {
+        blocked: true,
+        blockedAt: new Date(),
+        blockedBy: req.user._id,
+        publicAccess: false,
+        'voice.public': false,
+      }
+      : { blocked: false, blockedAt: null, blockedBy: null };
+
+    await Teaform.updateOne({ sessionId }, patch);
+
+    if (blocked) {
+      const scope = { sessionId, owner: form.owner };
+      await Promise.all([
+        Brewing.updateMany(scope, { publicAccess: false }),
+        Aroma.updateMany(scope, { publicAccess: false }),
+        Taste.updateMany(scope, { publicAccess: false }),
+      ]).catch(() => {});
+    }
+
+    return res.send({ data: { sessionId, blocked: Boolean(blocked) } });
+  } catch (err) {
+    console.error('admin setFormBlocked failed:', err);
+    return fail(next, 500, 'Ошибка по умолчанию.');
+  }
+};
+
+// DELETE /admin/forms/:sessionId — remove someone else's tasting outright, with
+// its проливы, descriptors and uploaded files. Same cascade as the owner's own
+// delete; the files are unlinked after the response, and against the form's
+// owner id, since that is what the upload filenames are prefixed with.
+module.exports.deleteForm = async (req, res, next) => {
+  const { sessionId } = req.params;
+
+  try {
+    const form = await Teaform.findOne({ sessionId });
+    if (!form) return fail(next, 404, 'Запись не найдена.');
+
+    const owner = form.owner;
+    const urls = formFileUrls(form);
+
+    await Promise.all([
+      Teaform.deleteOne({ sessionId, owner }),
+      Brewing.deleteMany({ sessionId, owner }),
+      Aroma.deleteMany({ sessionId, owner }),
+      Taste.deleteMany({ sessionId, owner }),
+    ]);
+
+    res.on('finish', () => {
+      if (res.statusCode < 400) unlinkFormFiles(urls, owner);
+    });
+
+    return res.send({ ok: true, message: 'Запись удалена.' });
+  } catch (err) {
+    console.error('admin deleteForm failed:', err);
     return fail(next, 500, 'Ошибка по умолчанию.');
   }
 };

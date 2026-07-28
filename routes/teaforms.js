@@ -9,6 +9,7 @@ const {
   patchTeaForm,
   getPublicTeaForms,
   getPublicTeaFormById,
+  getSitemap,
   getVoiceStatus,
   extractFromVoice,
   retryVoice,
@@ -82,6 +83,7 @@ const teaFormValidation = celebrate({
 });
 
 const publicRouter = express.Router();
+publicRouter.get('/sitemap.xml', getSitemap);
 publicRouter.get('/public-forms', getPublicTeaForms);
 publicRouter.get('/public-form/:sessionId', celebrate({
   params: Joi.object().keys({

@@ -155,7 +155,9 @@ module.exports.getPublicTeaForms = async (req, res, next) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
 
-    const filter = { publicAccess: true };
+    // $ne: true rather than false — documents written before the field existed
+    // have no `blocked` at all, and `blocked: false` would exclude every one.
+    const filter = { publicAccess: true, blocked: { $ne: true } };
     if (req.query.type) filter.type = req.query.type;
 
     const sortMap = {
@@ -194,9 +196,64 @@ module.exports.getPublicTeaForms = async (req, res, next) => {
   }
 };
 
+// GET /sitemap.xml — every publicly readable URL, for search engines.
+//
+// Served by the API rather than shipped as a static file because the list is
+// the database: a tasting published (or blocked) an hour ago has to be in (or
+// out of) it. robots.txt points here.
+const SITE = process.env.FRONTEND_URL || 'https://teaform.ru';
+
+const xmlEscape = (text) => String(text || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;');
+
+module.exports.getSitemap = async (req, res, next) => {
+  try {
+    const forms = await TeaForm.find({ publicAccess: true, blocked: { $ne: true } })
+      .sort({ createdAt: -1 })
+      .limit(5000)
+      .select('sessionId updatedAt createdAt');
+
+    const urls = [
+      { loc: `${SITE}/blog`, priority: '1.0', changefreq: 'daily' },
+      ...forms.map((form) => ({
+        loc: `${SITE}/blog/${form.sessionId}`,
+        lastmod: (form.updatedAt || form.createdAt || new Date()).toISOString().slice(0, 10),
+        priority: '0.7',
+        changefreq: 'monthly',
+      })),
+    ];
+
+    const body = urls.map(({
+      loc, lastmod, priority, changefreq,
+    }) => [
+      '  <url>',
+      `    <loc>${xmlEscape(loc)}</loc>`,
+      lastmod ? `    <lastmod>${lastmod}</lastmod>` : '',
+      `    <changefreq>${changefreq}</changefreq>`,
+      `    <priority>${priority}</priority>`,
+      '  </url>',
+    ].filter(Boolean).join('\n')).join('\n');
+
+    res.type('application/xml').send(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`,
+    );
+  } catch (err) {
+    const e = new Error('500 — Ошибка по умолчанию.');
+    e.statusCode = 500;
+    next(e);
+  }
+};
+
 // One public form by sessionId (shareable /blog/:sessionId pages).
 module.exports.getPublicTeaFormById = (req, res, next) => {
-  TeaForm.findOne({ sessionId: req.params.sessionId, publicAccess: true })
+  TeaForm.findOne({
+    sessionId: req.params.sessionId,
+    publicAccess: true,
+    blocked: { $ne: true },
+  })
     .populate('owner', 'name nickname avatar')
     .orFail(() => {
       const e = new Error('404 — Запись не найдена.');
@@ -291,15 +348,27 @@ module.exports.patchTeaForm = (req, res, next) => {
     }
   }
 
+  // A blocked tasting cannot be published again by its owner. Expressed as part
+  // of the filter so there is no read-then-write window between the check and
+  // the update; the miss is told apart from a genuine 404 below.
+  const filter = { sessionId: sessionId, owner: owner };
+  if (publicAccess === true) filter.blocked = { $ne: true };
+
   TeaForm.findOneAndUpdate(
-    {
-      sessionId: sessionId,
-      owner: owner,
-    },
+    filter,
     update,
     {new : true}
     )
     .then(async (form) => {
+      if (!form && publicAccess === true) {
+        const blockedForm = await TeaForm.findOne({ sessionId, owner }).select("blocked");
+        if (blockedForm && blockedForm.blocked) {
+          const e = new Error("Запись скрыта администратором и не может быть опубликована.");
+          e.statusCode = 403;
+          throw e;
+        }
+      }
+
       // publicAccess is duplicated onto every brewing, aroma and taste, and the
       // public endpoints filter on each document's own copy. Updating only the
       // teaform published the tasting while leaving its проливы invisible —
@@ -319,7 +388,11 @@ module.exports.patchTeaForm = (req, res, next) => {
       });
     })
     .catch((err) => {
-      if (err.name === "ValidationError") {
+      // The moderation refusal above carries its own status and message; without
+      // this it would reach the user as a generic 500.
+      if (err.statusCode) {
+        next(err);
+      } else if (err.name === "ValidationError") {
         const e = new Error(
           "400 — Переданы некорректные данные."
         );
@@ -487,6 +560,12 @@ const formFileUrls = (form) => {
     (voice.track && voice.track.url) || "",
   ].filter(Boolean);
 };
+
+// Shared with the admin moderation endpoints, which delete other people's
+// tastings: the ownership prefix check inside takes the form's owner, not the
+// caller, so an admin delete still removes exactly that owner's files.
+module.exports.unlinkFormFiles = unlinkFormFiles;
+module.exports.formFileUrls = formFileUrls;
 
 module.exports.delTeaFormBySessionID = (req, res, next) => {
 
