@@ -53,8 +53,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-// Uploaded avatars (behind the /api proxy: /api/uploads/<file>).
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Uploaded avatars and tea photos (behind the /api proxy: /api/uploads/<file>).
+//
+// Filenames are unique per upload and a stored file is never rewritten in
+// place, so these can be cached hard. express.static defaults to maxAge 0,
+// which had every tasting photo revalidating on every view of the feed.
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '30d',
+  immutable: true,
+}));
 
 // Health endpoint: reports DB connectivity so orchestration can detect
 // a dead Mongo connection (readyState 1 = connected).
@@ -90,6 +97,9 @@ app.use((req, res, next) => {
 
 // Routes
 app.use(require('./routes/signs'));
+// Crawler HTML. Public by definition and mounted before `auth`, since the whole
+// point is that something with no cookie can read the published tastings.
+app.use(require('./routes/render'));
 app.use(require('./routes/teaforms').publicRouter);
 app.use(require('./routes/aromas').publicRouter);
 app.use(require('./routes/tastes').publicRouter);

@@ -96,6 +96,10 @@ const userSchema = new mongoose.Schema(
       {
         url: { type: String, required: true },
         kind: { type: String, enum: ["dry", "liquor", "wet"], required: true },
+        // 320px WebP for the feed, written at upload time. Optional: photos
+        // uploaded before it existed have none, and the card falls back to the
+        // full-size original for those.
+        thumb: { type: String },
         _id: false,
       },
     ],
@@ -154,11 +158,24 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // Readable public address: /blog/da-hun-pao-ba5e1be584. Derived from nameRU
+    // and a hash of the sessionId (utils/slugify.js), regenerated when the tea
+    // is renamed. Not required: documents written before this field existed are
+    // backfilled by utils/migrateSlugs.js, and until then they resolve by
+    // sessionId, which stays the permanent fallback.
+    slug: {
+      type: String,
+      required: false,
+    },
   },
   { timestamps: true }
 );
 
 userSchema.index({ owner: 1, sessionId: 1 });
 userSchema.index({ publicAccess: 1, createdAt: -1 });
+// Sparse: pre-migration documents have no slug at all, and a plain unique index
+// would treat every one of their missing values as the same null and reject all
+// but the first.
+userSchema.index({ slug: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("teaform", userSchema);

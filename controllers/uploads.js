@@ -3,20 +3,30 @@ const fs = require('fs');
 
 const { uploadDir } = require('../middlewares/upload');
 const { normalizeToMp3, hasFfmpeg } = require('../utils/audio');
+const { makeThumb, removeThumb } = require('../utils/thumbnail');
 
 // Uploads are document-agnostic on purpose: the tasting form is only created
 // at the last step of the wizard, while the earlier steps live in localStorage
 // (which cannot hold a File). So a photo is stored as soon as it is picked and
 // only its URL travels through the form state.
-module.exports.createTeaPhoto = (req, res, next) => {
+module.exports.createTeaPhoto = async (req, res, next) => {
   if (!req.file) {
     const e = new Error('Файл не получен: отправьте изображение в поле "photo".');
     e.statusCode = 400;
     return next(e);
   }
 
+  // A 320px WebP for the feed, which renders these at 130px. Best-effort: an
+  // empty string means the card shows the original, exactly as it did before.
+  const thumb = await makeThumb(req.file.filename);
+
   // Served by express at /uploads, reached by the browser through the /api proxy.
-  return res.send({ data: { url: `/api/uploads/${req.file.filename}` } });
+  return res.send({
+    data: {
+      url: `/api/uploads/${req.file.filename}`,
+      ...(thumb ? { thumb: `/api/uploads/${thumb}` } : {}),
+    },
+  });
 };
 
 // A voice note follows the same document-agnostic rule as a photo, with one
@@ -76,8 +86,11 @@ module.exports.deleteUpload = (req, res, next) => {
   }
 
   // Idempotent: removing an already-removed file is a success, so the UI does
-  // not have to distinguish a double click from a real failure.
+  // not have to distinguish a double click from a real failure. The thumbnail
+  // goes with it — it has no owner of its own, so nothing else would ever
+  // collect it.
   return fs.promises.unlink(path.join(uploadDir, filename))
+    .then(() => removeThumb(filename))
     .then(() => res.status(204).send())
     .catch((err) => {
       if (err.code === 'ENOENT') return res.status(204).send();

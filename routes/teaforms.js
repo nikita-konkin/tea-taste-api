@@ -51,6 +51,9 @@ const teaFormValidation = celebrate({
       Joi.object().keys({
         url: Joi.string().pattern(UPLOAD_URL).required(),
         kind: Joi.string().valid('dry', 'liquor', 'wet').required(),
+        // Written by the upload endpoint and echoed back by the edit dialog.
+        // Same anchored pattern as url — it is a path the browser will fetch.
+        thumb: Joi.string().pattern(UPLOAD_URL).allow(''),
       }),
     ),
     // Same no-.default() rule as photos. The server-owned half (track,
@@ -85,9 +88,13 @@ const teaFormValidation = celebrate({
 const publicRouter = express.Router();
 publicRouter.get('/sitemap.xml', getSitemap);
 publicRouter.get('/public-forms', getPublicTeaForms);
+// Accepts a readable slug (da-hun-pao-ba5e1be584) or a raw sessionId — every
+// /blog/<uuid> link shared before slugs existed still has to resolve. The
+// pattern is what a slug can be built from (utils/slugify.js) plus the hyphens
+// of a UUID, so it stays a validated parameter and not a free-text lookup.
 publicRouter.get('/public-form/:sessionId', celebrate({
   params: Joi.object().keys({
-    sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
+    sessionId: Joi.string().pattern(/^[a-z0-9-]{1,80}$/i).required(),
   }),
 }), getPublicTeaFormById);
 

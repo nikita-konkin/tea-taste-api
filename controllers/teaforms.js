@@ -11,6 +11,9 @@ const { uploadDir } = require("../middlewares/upload");
 const { ownsUpload } = require("./uploads");
 const { enqueue } = require("../utils/voiceJob");
 const { extractFromTranscript } = require("../utils/extractForm");
+const { buildSlug, looksLikeUuid, isDuplicateSlug } = require("../utils/slugify");
+const { orderedPhotoUrls } = require("../utils/photos");
+const { teaTypeSlugs } = require("../utils/teaTypes");
 
 // Only `segments` is the client's to send. Everything else under `voice` —
 // the merged track, the transcript, the recognition status and operation id —
@@ -76,7 +79,7 @@ module.exports.createTeaForm = (req, res, next) => {
   // deliberate act in /my_forms, after the owner has heard it back.
   const publishable = voiceDoc ? false : publicAccess;
 
-  TeaForm.updateMany(
+  const insert = (slug) => TeaForm.updateMany(
     {
       sessionId: sessionId,
       owner: owner,
@@ -96,6 +99,10 @@ module.exports.createTeaForm = (req, res, next) => {
         brewingtype: brewingtype,
         publicAccess: publishable,
         sessionId: sessionId,
+        // Omitted rather than written empty when there is none: the unique index
+        // ignores a missing slug but treats '' as a value two documents would be
+        // colliding on.
+        ...(slug ? { slug } : {}),
         owner: owner,
         averageRating: averageRating,
         photos: photos,
@@ -103,7 +110,18 @@ module.exports.createTeaForm = (req, res, next) => {
       },
     },
     { upsert: true }
-  )
+  );
+
+  // The readable URL is an alias, not the tasting's identity — sessionId always
+  // resolves it. So on the vanishingly rare slug collision the tasting is saved
+  // without one and keeps its sessionId address, rather than failing to save at
+  // all over a cosmetic field.
+  insert(buildSlug(title, sessionId))
+    .catch((err) => {
+      if (!isDuplicateSlug(err)) throw err;
+      console.warn(`Slug collision for ${sessionId}; saved without one.`);
+      return insert('');
+    })
     .then((form) => {
       // After the response: merging and recognition take far longer than a
       // request may, and the tasting is saved either way.
@@ -148,6 +166,18 @@ module.exports.getTeaForms = (req, res, next) => {
     });
 };
 
+// Exported so the crawler renderer orders the feed exactly as the app does —
+// the same URL must not list the tastings in two different orders depending on
+// who asked for it.
+const PUBLIC_FEED_SORTS = {
+  date: { createdAt: -1 },
+  '-date': { createdAt: 1 },
+  rating: { averageRating: -1, createdAt: -1 },
+  '-rating': { averageRating: 1, createdAt: -1 },
+};
+
+module.exports.PUBLIC_FEED_SORTS = PUBLIC_FEED_SORTS;
+
 // Public feed with pagination, tea-type filter and sorting:
 //   ?page=1&limit=10&type=<exact tea type>&sort=date|-date|rating|-rating
 module.exports.getPublicTeaForms = async (req, res, next) => {
@@ -160,13 +190,7 @@ module.exports.getPublicTeaForms = async (req, res, next) => {
     const filter = { publicAccess: true, blocked: { $ne: true } };
     if (req.query.type) filter.type = req.query.type;
 
-    const sortMap = {
-      date: { createdAt: -1 },
-      '-date': { createdAt: 1 },
-      rating: { averageRating: -1, createdAt: -1 },
-      '-rating': { averageRating: 1, createdAt: -1 },
-    };
-    const sort = sortMap[req.query.sort] || sortMap.date;
+    const sort = PUBLIC_FEED_SORTS[req.query.sort] || PUBLIC_FEED_SORTS.date;
 
     const [total, forms] = await Promise.all([
       TeaForm.countDocuments(filter),
@@ -214,31 +238,64 @@ module.exports.getSitemap = async (req, res, next) => {
     const forms = await TeaForm.find({ publicAccess: true, blocked: { $ne: true } })
       .sort({ createdAt: -1 })
       .limit(5000)
-      .select('sessionId updatedAt createdAt');
+      .select('sessionId slug nameRU photos updatedAt createdAt');
+
+    const newest = forms[0];
+    const feedLastmod = newest
+      ? (newest.updatedAt || newest.createdAt).toISOString().slice(0, 10)
+      : undefined;
 
     const urls = [
-      { loc: `${SITE}/blog`, priority: '1.0', changefreq: 'daily' },
+      // The root was missing entirely — it is the page that explains what the
+      // site is, and the one most likely to rank for the site's own name.
+      {
+        loc: `${SITE}/`, priority: '1.0', changefreq: 'weekly', lastmod: feedLastmod,
+      },
+      {
+        loc: `${SITE}/blog`, priority: '0.9', changefreq: 'daily', lastmod: feedLastmod,
+      },
+      // One hub per tea type. Listed unconditionally: a type with nothing in it
+      // yet is a page that will fill up, and dropping it from the sitemap only
+      // delays the day it is crawled.
+      ...teaTypeSlugs.map((t) => ({
+        loc: `${SITE}/blog/type/${t.slug}`,
+        priority: '0.8',
+        changefreq: 'weekly',
+        lastmod: feedLastmod,
+      })),
       ...forms.map((form) => ({
-        loc: `${SITE}/blog/${form.sessionId}`,
+        loc: `${SITE}/blog/${form.slug || form.sessionId}`,
         lastmod: (form.updatedAt || form.createdAt || new Date()).toISOString().slice(0, 10),
         priority: '0.7',
         changefreq: 'monthly',
+        // Tea photography is a real way into a site like this through image
+        // search, and nothing else on the site declares these pictures exist.
+        images: orderedPhotoUrls(form.photos).map((url) => ({
+          loc: `${SITE}${url}`,
+          title: form.nameRU,
+        })),
       })),
     ];
 
     const body = urls.map(({
-      loc, lastmod, priority, changefreq,
+      loc, lastmod, priority, changefreq, images,
     }) => [
       '  <url>',
       `    <loc>${xmlEscape(loc)}</loc>`,
       lastmod ? `    <lastmod>${lastmod}</lastmod>` : '',
       `    <changefreq>${changefreq}</changefreq>`,
       `    <priority>${priority}</priority>`,
+      ...(images || []).map((img) => [
+        '    <image:image>',
+        `      <image:loc>${xmlEscape(img.loc)}</image:loc>`,
+        `      <image:title>${xmlEscape(img.title)}</image:title>`,
+        '    </image:image>',
+      ].join('\n')),
       '  </url>',
     ].filter(Boolean).join('\n')).join('\n');
 
     res.type('application/xml').send(
-      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${body}\n</urlset>\n`,
     );
   } catch (err) {
     const e = new Error('500 — Ошибка по умолчанию.');
@@ -247,13 +304,23 @@ module.exports.getSitemap = async (req, res, next) => {
   }
 };
 
-// One public form by sessionId (shareable /blog/:sessionId pages).
+// The filter that finds one published tasting by either address it can have.
+//
+// Every /blog/<uuid> link ever shared or indexed has to keep resolving, so the
+// sessionId is matched as well as the slug — forever, not as a migration
+// window. Which one matched is decided by shape, not by trying both: a UUID is
+// never a valid slug and a slug is never a valid UUID.
+const publicFormFilter = (slugOrId) => ({
+  ...(looksLikeUuid(slugOrId) ? { sessionId: slugOrId } : { slug: slugOrId }),
+  publicAccess: true,
+  blocked: { $ne: true },
+});
+
+module.exports.publicFormFilter = publicFormFilter;
+
+// One public form by slug or sessionId (shareable /blog/:slugOrId pages).
 module.exports.getPublicTeaFormById = (req, res, next) => {
-  TeaForm.findOne({
-    sessionId: req.params.sessionId,
-    publicAccess: true,
-    blocked: { $ne: true },
-  })
+  TeaForm.findOne(publicFormFilter(req.params.sessionId))
     .populate('owner', 'name nickname avatar')
     .orFail(() => {
       const e = new Error('404 — Запись не найдена.');
@@ -325,6 +392,14 @@ module.exports.patchTeaForm = (req, res, next) => {
     // owner: owner,
   };
 
+  // Renaming the tea moves its public address with it, so the URL keeps
+  // describing what is on the page. The sessionId half of the slug does not
+  // change, so an old link still identifies the same tasting and the render
+  // endpoint redirects it to the new address rather than 404ing.
+  if (nameRU && buildSlug(nameRU, sessionId)) {
+    update.slug = buildSlug(nameRU, sessionId);
+  }
+
   // Sharing the recording is the owner's call and is edited on its own, without
   // touching the segments — so it is handled apart from the block below.
   if (voice && typeof voice.public === "boolean") {
@@ -354,11 +429,16 @@ module.exports.patchTeaForm = (req, res, next) => {
   const filter = { sessionId: sessionId, owner: owner };
   if (publicAccess === true) filter.blocked = { $ne: true };
 
-  TeaForm.findOneAndUpdate(
-    filter,
-    update,
-    {new : true}
-    )
+  // Same rule as creation: the slug is cosmetic and sessionId always resolves,
+  // so a collision must not cost the user their edit. The tasting keeps the
+  // address it already had.
+  TeaForm.findOneAndUpdate(filter, update, { new: true })
+    .catch((err) => {
+      if (!isDuplicateSlug(err)) throw err;
+      console.warn(`Slug collision renaming ${sessionId}; address left unchanged.`);
+      const { slug, ...rest } = update;
+      return TeaForm.findOneAndUpdate(filter, rest, { new: true });
+    })
     .then(async (form) => {
       if (!form && publicAccess === true) {
         const blockedForm = await TeaForm.findOne({ sessionId, owner }).select("blocked");
