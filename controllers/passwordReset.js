@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const User = require('../models/user');
+const { t } = require('../utils/apiMessages');
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -44,7 +45,7 @@ module.exports.requestPasswordReset = async (req, res, next) => {
 
     // Always answer 200 so the endpoint can't be used to enumerate emails.
     if (!user) {
-      return res.send({ ok: true, message: 'Если такой email зарегистрирован, ссылка отправлена.' });
+      return res.send({ ok: true, message: t(req, 'api.resetLinkSent') });
     }
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -60,14 +61,14 @@ module.exports.requestPasswordReset = async (req, res, next) => {
     const link = `${base}/reset-password?token=${token}`;
     await deliverResetLink(email, link);
 
-    const payload = { ok: true, message: 'Если такой email зарегистрирован, ссылка отправлена.' };
+    const payload = { ok: true, message: t(req, 'api.resetLinkSent') };
     if (process.env.NODE_ENV !== 'production') {
       payload.resetToken = token; // testing convenience outside production
     }
     return res.send(payload);
   } catch (err) {
     console.error('Password reset request failed:', err);
-    const e = new Error('500 — Ошибка по умолчанию.');
+    const e = new Error(t(req, 'api.default'));
     e.statusCode = 500;
     return next(e);
   }
@@ -83,7 +84,7 @@ module.exports.confirmPasswordReset = async (req, res, next) => {
     }).select('+passwordResetToken +passwordResetExpires');
 
     if (!user) {
-      const e = new Error('Ссылка недействительна или устарела. Запросите восстановление заново.');
+      const e = new Error(t(req, 'api.resetLinkInvalid'));
       e.statusCode = 400;
       return next(e);
     }
@@ -97,10 +98,10 @@ module.exports.confirmPasswordReset = async (req, res, next) => {
       }
     );
 
-    return res.send({ ok: true, message: 'Пароль изменён. Теперь вы можете войти.' });
+    return res.send({ ok: true, message: t(req, 'api.passwordChangedSignIn') });
   } catch (err) {
     console.error('Password reset confirm failed:', err);
-    const e = new Error('500 — Ошибка по умолчанию.');
+    const e = new Error(t(req, 'api.default'));
     e.statusCode = 500;
     return next(e);
   }

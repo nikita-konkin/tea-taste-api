@@ -4,6 +4,7 @@ const fs = require('fs');
 const { uploadDir } = require('../middlewares/upload');
 const { normalizeToMp3, hasFfmpeg } = require('../utils/audio');
 const { makeThumb, removeThumb } = require('../utils/thumbnail');
+const { t } = require('../utils/apiMessages');
 
 // Uploads are document-agnostic on purpose: the tasting form is only created
 // at the last step of the wizard, while the earlier steps live in localStorage
@@ -11,7 +12,7 @@ const { makeThumb, removeThumb } = require('../utils/thumbnail');
 // only its URL travels through the form state.
 module.exports.createTeaPhoto = async (req, res, next) => {
   if (!req.file) {
-    const e = new Error('Файл не получен: отправьте изображение в поле "photo".');
+    const e = new Error(t(req, 'api.noFilePhoto'));
     e.statusCode = 400;
     return next(e);
   }
@@ -36,7 +37,7 @@ module.exports.createTeaPhoto = async (req, res, next) => {
 // merge time, which keeps the concat a join of identical formats.
 module.exports.createVoice = (req, res, next) => {
   if (!req.file) {
-    const e = new Error('Файл не получен: отправьте запись в поле "audio".');
+    const e = new Error(t(req, 'api.noFileAudio'));
     e.statusCode = 400;
     return next(e);
   }
@@ -46,7 +47,7 @@ module.exports.createVoice = (req, res, next) => {
   return hasFfmpeg()
     .then((ready) => {
       if (!ready) {
-        const e = new Error('Обработка аудио на сервере недоступна.');
+        const e = new Error(t(req, 'api.audioUnavailable'));
         e.statusCode = 500;
         throw e;
       }
@@ -58,7 +59,7 @@ module.exports.createVoice = (req, res, next) => {
     .catch((err) => {
       fs.promises.unlink(raw).catch(() => {});
       if (err.statusCode) return next(err);
-      const e = new Error('Не удалось обработать запись. Попробуйте записать ещё раз.');
+      const e = new Error(t(req, 'api.audioFailed'));
       e.statusCode = 400;
       return next(e);
     });
@@ -80,7 +81,7 @@ module.exports.deleteUpload = (req, res, next) => {
   const { filename } = req.params;
 
   if (!ownsUpload(filename, req.user._id)) {
-    const e = new Error('403 — Нет доступа к этому файлу.');
+    const e = new Error(t(req, 'api.noFileAccess'));
     e.statusCode = 403;
     return next(e);
   }
@@ -94,7 +95,7 @@ module.exports.deleteUpload = (req, res, next) => {
     .then(() => res.status(204).send())
     .catch((err) => {
       if (err.code === 'ENOENT') return res.status(204).send();
-      const e = new Error('500 — Ошибка по умолчанию.');
+      const e = new Error(t(req, 'api.default'));
       e.statusCode = 500;
       return next(e);
     });

@@ -6,6 +6,7 @@ const Taste = require('../models/taste');
 const { MONTHLY_LIMIT_SECONDS, currentPeriod } = require('../utils/voiceQuota');
 const { getSettings, updateSettings } = require('../utils/settings');
 const { unlinkFormFiles, formFileUrls } = require('./teaforms');
+const { t } = require('../utils/apiMessages');
 
 const fail = (next, statusCode, message) => next({ message, statusCode });
 
@@ -182,7 +183,7 @@ module.exports.deleteForm = async (req, res, next) => {
       if (res.statusCode < 400) unlinkFormFiles(urls, owner);
     });
 
-    return res.send({ ok: true, message: 'Запись удалена.' });
+    return res.send({ ok: true, message: t(req, 'api.formDeleted') });
   } catch (err) {
     console.error('admin deleteForm failed:', err);
     return fail(next, 500, 'Ошибка по умолчанию.');
@@ -228,7 +229,7 @@ module.exports.deleteUser = async (req, res, next) => {
     ]);
     await User.deleteOne({ _id: id });
 
-    return res.send({ ok: true, message: 'Пользователь и его данные удалены.' });
+    return res.send({ ok: true, message: t(req, 'api.userDeleted') });
   } catch (err) {
     console.error('admin deleteUser failed:', err);
     return fail(next, 500, 'Ошибка по умолчанию.');

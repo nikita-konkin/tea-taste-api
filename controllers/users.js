@@ -2,11 +2,12 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/user');
 const { MONTHLY_LIMIT_SECONDS, currentPeriod } = require('../utils/voiceQuota');
 const { MAX_TRACK_SECONDS } = require('../utils/audio');
+const { t } = require('../utils/apiMessages');
 
 module.exports.getUserById = (req, res, next) => {
   User.findById(req.user._id)
     .orFail(() => {
-      const e = new Error('404 — Запись не найдена.');
+      const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
       return e;
     })
@@ -33,11 +34,11 @@ module.exports.getUserById = (req, res, next) => {
       if (err.statusCode) {
         next(err);
       } else if (err.name === 'CastError') {
-        const e = new Error('400 - Невалидный id');
+        const e = new Error(t(req, 'api.badId'));
         e.statusCode = 400;
         next(e);
       } else {
-        const e = new Error('500 — Ошибка по умолчанию.');
+        const e = new Error(t(req, 'api.default'));
         e.statusCode = 500;
         next(e);
       }
@@ -52,13 +53,16 @@ module.exports.updateUserProfile = (req, res, next) => {
     career,
     about,
     avatar,
+    language,
   } = req.body;
 
   // Only overwrite the fields that were actually sent;
   // an empty string clears the (optional) field.
   const update = {};
   const unset = {};
-  Object.entries({ name, nickname, email, career, about, avatar }).forEach(([key, value]) => {
+  Object.entries({
+    name, nickname, email, career, about, avatar, language,
+  }).forEach(([key, value]) => {
     if (value === '' && key !== 'name' && key !== 'email') {
       unset[key] = 1;
     } else if (value !== undefined) {
@@ -79,7 +83,7 @@ module.exports.updateUserProfile = (req, res, next) => {
     .catch((err) => {
 
       if (err.name === 'ValidationError') {
-        const e = new Error('400 - Некорректные данные');
+        const e = new Error(t(req, 'api.badData'));
         e.statusCode = 400;
         next(e);
       } else if (err.code === 11000) {
@@ -92,7 +96,7 @@ module.exports.updateUserProfile = (req, res, next) => {
         e.statusCode = 409;
         next(e);
       } else {
-        const e = new Error('500 — Ошибка по умолчанию.');
+        const e = new Error(t(req, 'api.default'));
         e.statusCode = 500;
         next(e);
       }
@@ -104,7 +108,7 @@ module.exports.updateUserProfile = (req, res, next) => {
 // /api/uploads/<file> (express serves it at /uploads).
 module.exports.updateUserAvatar = (req, res, next) => {
   if (!req.file) {
-    const e = new Error('Файл не получен: отправьте изображение в поле "avatar".');
+    const e = new Error(t(req, 'api.noFileAvatar'));
     e.statusCode = 400;
     return next(e);
   }
@@ -114,7 +118,7 @@ module.exports.updateUserAvatar = (req, res, next) => {
   return User.findByIdAndUpdate(req.user._id, { avatar: url }, { new: true })
     .then((user) => res.send({ data: { avatar: user.avatar } }))
     .catch(() => {
-      const e = new Error('500 — Ошибка по умолчанию.');
+      const e = new Error(t(req, 'api.default'));
       e.statusCode = 500;
       next(e);
     });
@@ -125,14 +129,14 @@ module.exports.updateUserPassword = (req, res, next) => {
 
   User.findById(req.user._id).select('+password')
     .orFail(() => {
-      const e = new Error('404 — Запись не найдена.');
+      const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
       return e;
     })
     .then((user) => bcrypt.compare(oldPassword, user.password))
     .then((matched) => {
       if (!matched) {
-        const e = new Error('Неверный текущий пароль.');
+        const e = new Error(t(req, 'api.wrongCurrentPassword'));
         e.statusCode = 401;
         throw e;
       }
@@ -140,13 +144,13 @@ module.exports.updateUserPassword = (req, res, next) => {
     })
     .then((hash) => User.findByIdAndUpdate(req.user._id, { password: hash }))
     .then(() => {
-      res.send({ ok: true, message: 'Пароль изменён.' });
+      res.send({ ok: true, message: t(req, 'api.passwordChanged') });
     })
     .catch((err) => {
       if (err.statusCode) {
         next(err);
       } else {
-        const e = new Error('500 — Ошибка по умолчанию.');
+        const e = new Error(t(req, 'api.default'));
         e.statusCode = 500;
         next(e);
       }

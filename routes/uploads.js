@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 
 const { uploadTeaPhoto, uploadVoice } = require('../middlewares/upload');
 const { createTeaPhoto, createVoice, deleteUpload } = require('../controllers/uploads');
+const { tFor } = require('../utils/apiMessages');
 
 // Tighter than the global limiter (1000/15min): these requests write to disk.
 // Three photo slots plus a voice note per пролив and retries still leaves
@@ -12,7 +13,7 @@ const uploadLimiter = rateLimit({
   max: 90,
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Слишком много загрузок. Повторите попытку позже.',
+  message: tFor('api.tooManyUploads'),
 });
 
 privateRouter.post('/upload/tea-photo', uploadLimiter, uploadTeaPhoto, createTeaPhoto);

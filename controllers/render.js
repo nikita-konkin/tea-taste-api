@@ -21,14 +21,20 @@ const Brewing = require('../models/brewing');
 const Aroma = require('../models/aroma');
 const Taste = require('../models/taste');
 const { publicFormFilter, PUBLIC_FEED_SORTS } = require('./teaforms');
-const { teaTypeSlugs, teaTypeBySlug } = require('../utils/teaTypes');
+const { teaTypeSlugs, teaTypeBySlug, teaTypeShort, teaTypeName } = require('../utils/teaTypes');
+const {
+  LOCALES, DEFAULT_LOCALE, LOCALE_TAG, OG_LOCALE, PLURALS,
+  localeFromPath, localizePath, translate, pluralize,
+} = require('../utils/locale');
+const { translateDescriptorPath } = require('../utils/descriptors');
+const { translateOption } = require('../utils/options');
 const { previewPhotoUrl } = require('../utils/photos');
 const {
   ORIGIN, filled, formDescription, formJsonLd, clamp,
 } = require('../utils/formMeta');
 
 const FEED_LIMIT = 10;
-const SITE = 'Форма чая';
+
 
 const esc = (text) => String(text === undefined || text === null ? '' : text)
   .replace(/&/g, '&amp;')
@@ -46,10 +52,17 @@ const jsonLdScript = (data) => `<script type="application/ld+json">${
 // The same <head> PageMeta.jsx builds, in the markup rather than after a render.
 const head = ({
   title, description, path, image, type = 'website', jsonLd, noIndex,
+  locale = DEFAULT_LOCALE,
 }) => {
-  const fullTitle = title ? `${title} — ${SITE}` : `${SITE} — дневник чайных дегустаций`;
+  const site = translate('site.name', locale);
+  const fullTitle = title
+    ? `${title} — ${site}`
+    : `${site} — ${translate('site.tagline', locale)}`;
   const text = clamp(description);
-  const url = `${ORIGIN}${path || '/'}`;
+  // `path` arrives bare; the prefix is added here so the canonical and the
+  // alternates below cannot disagree about where this page lives.
+  const bare = path || '/';
+  const url = `${ORIGIN}${localizePath(bare, locale)}`;
   const preview = image
     ? (image.startsWith('http') ? image : `${ORIGIN}${image}`)
     : `${ORIGIN}/logo512.png`;
@@ -62,8 +75,8 @@ const head = ({
     `<link rel="canonical" href="${esc(url)}" />`,
     noIndex ? '<meta name="robots" content="noindex, nofollow" />' : '',
     `<meta property="og:type" content="${esc(type)}" />`,
-    `<meta property="og:site_name" content="${esc(SITE)}" />`,
-    '<meta property="og:locale" content="ru_RU" />',
+    `<meta property="og:site_name" content="${esc(site)}" />`,
+    `<meta property="og:locale" content="${OG_LOCALE[locale]}" />`,
     `<meta property="og:url" content="${esc(url)}" />`,
     `<meta property="og:title" content="${esc(fullTitle)}" />`,
     text ? `<meta property="og:description" content="${esc(text)}" />` : '',
@@ -72,32 +85,51 @@ const head = ({
     `<meta name="twitter:title" content="${esc(fullTitle)}" />`,
     text ? `<meta name="twitter:description" content="${esc(text)}" />` : '',
     `<meta name="twitter:image" content="${esc(preview)}" />`,
+    // hreflang: the same page in each language, pointing at each other.
+    // Without these, three translations look like three competing pages and the
+    // engine picks one — usually not the reader's. x-default is the Russian
+    // original, which is what to serve when no language matches.
+    ...(noIndex ? [] : LOCALES.map((l) => (
+      `<link rel="alternate" hreflang="${LOCALE_TAG[l]}" href="${esc(`${ORIGIN}${localizePath(bare, l)}`)}" />`
+    ))),
+    noIndex ? '' : `<link rel="alternate" hreflang="x-default" href="${esc(`${ORIGIN}${localizePath(bare, DEFAULT_LOCALE)}`)}" />`,
     jsonLd ? jsonLdScript(jsonLd) : '',
   ].filter(Boolean).join('\n    ');
 };
 
 // The public link graph, same as SiteFooter.jsx.
-const footer = () => `
+//
+// `bare` is the current page without its locale prefix, so the language links
+// point at THIS page in the other two languages rather than at their home page.
+const footer = (locale, bare) => {
+  const u = (path) => localizePath(path, locale);
+  return `
     <nav>
-      <h2>Разделы</h2>
+      <h2>${esc(translate('footer.sections', locale))}</h2>
       <ul>
-        <li><a href="/">О сайте</a></li>
-        <li><a href="/blog">Лента дегустаций</a></li>
+        <li><a href="${u('/')}">${esc(translate('footer.about', locale))}</a></li>
+        <li><a href="${u('/blog')}">${esc(translate('footer.feed', locale))}</a></li>
+        <li><a href="${u('/sign-up')}">${esc(translate('footer.signup', locale))}</a></li>
       </ul>
-      <h2>Типы чая</h2>
+      <h2>${esc(translate('footer.teaTypes', locale))}</h2>
       <ul>
-        ${teaTypeSlugs.map((t) => `<li><a href="/blog/type/${t.slug}">${esc(t.short)}</a></li>`).join('\n        ')}
+        ${teaTypeSlugs.map((t) => `<li><a href="${u(`/blog/type/${t.slug}`)}">${esc(teaTypeShort(t, locale))}</a></li>`).join('\n        ')}
+      </ul>
+      <h2>${esc(translate('nav.language', locale))}</h2>
+      <ul>
+        ${LOCALES.filter((l) => l !== locale).map((l) => `<li><a hreflang="${LOCALE_TAG[l]}" href="${esc(localizePath(bare || '/', l))}">${esc(translate('site.name', l))}</a></li>`).join('\n        ')}
       </ul>
     </nav>`;
+};
 
 const page = ({ meta, body }) => `<!DOCTYPE html>
-<html lang="ru">
+<html lang="${LOCALE_TAG[meta.locale || DEFAULT_LOCALE]}">
   <head>
     ${head(meta)}
   </head>
   <body>
 ${body}
-${footer()}
+${footer(meta.locale || DEFAULT_LOCALE, meta.path || '/')}
   </body>
 </html>
 `;
@@ -114,18 +146,31 @@ const formUrl = (form) => `/blog/${form.slug || form.sessionId}`;
 
 const photoUrl = (form) => previewPhotoUrl(form.photos);
 
+// The public path this request stands for, with the internal /render prefix
+// removed: nginx forwards /en/blog as /render/en/blog, so the language is the
+// SECOND segment here and the first everywhere else. Reading it without
+// stripping made every page resolve to Russian — the alternates were still
+// right, because those are built from the bare path, which is exactly why the
+// bug showed up as untranslated text rather than as a broken link.
+const publicPath = (req) => String(req.originalUrl || '/').replace(/^\/render/, '') || '/';
+const localeOf = (req) => localeFromPath(publicPath(req));
+
 // GET /render/blog and /render/blog/type/:typeSlug
 const renderFeed = async (req, res, next) => {
   try {
     const { typeSlug } = req.params;
     const teaType = typeSlug ? teaTypeBySlug(typeSlug) : null;
+    // The language is the URL's first segment — nginx forwards the whole path,
+    // prefix included, so /en/blog arrives here as /render/en/blog.
+    const locale = localeOf(req);
+    const T = (key, vars) => translate(key, locale, vars);
 
     // An unknown type is a 404, not an empty feed: /blog/type/anything must not
     // become another page that answers 200 with nothing on it.
     if (typeSlug && !teaType) {
       return send(res, page({
-        meta: { title: 'Страница не найдена', path: req.originalUrl, noIndex: true },
-        body: '    <h1>Страница не найдена</h1>\n    <p><a href="/blog">Все дегустации</a></p>',
+        meta: { title: T('error.pageNotFound'), path: publicPath(req), noIndex: true, locale },
+        body: `    <h1>${esc(T('error.pageNotFound'))}</h1>\n    <p><a href="${esc(localizePath('/blog', locale))}">${esc(T('error.allTastings'))}</a></p>`,
       }), 404);
     }
 
@@ -147,27 +192,30 @@ const renderFeed = async (req, res, next) => {
     const basePath = teaType ? `/blog/type/${teaType.slug}` : '/blog';
     const pageUrl = (n) => (n > 1 ? `${basePath}?page=${n}` : basePath);
 
-    const heading = teaType ? `${teaType.short} — дегустации` : 'Публичные формы';
+    const typeName = teaType ? teaTypeShort(teaType, locale) : '';
+    const heading = teaType ? T('feed.typeHeading', { type: typeName }) : T('feed.public');
     const title = teaType
-      ? `${teaType.short}: дегустации и отзывы${page_ > 1 ? ` — страница ${page_}` : ''}`
-      : `Лента дегустаций${page_ > 1 ? ` — страница ${page_}` : ''}`;
+      ? (page_ > 1
+        ? T('feed.typeTitlePage', { type: typeName, page: page_ })
+        : T('feed.typeTitle', { type: typeName }))
+      : (page_ > 1 ? T('feed.titlePage', { page: page_ }) : T('feed.title'));
     const description = teaType
-      ? `Дегустации, собранные читателями: ${teaType.short.toLowerCase()} — аромат, вкус, проливы, оценки и фотографии.`
-      : 'Дегустации чая, которыми поделились участники: аромат, вкус, проливы, фотографии и голосовые заметки.';
+      ? T('feed.typeDescription', { type: typeName })
+      : T('feed.description');
 
     const items = forms.map((form, i) => {
       const author = Array.isArray(form.owner) ? form.owner[0] : form.owner;
-      const url = formUrl(form);
+      const url = localizePath(formUrl(form), locale);
       const photo = photoUrl(form);
       return `      <li>
         <article>
           <h2><a href="${esc(url)}">${esc(form.nameRU)}</a></h2>
-          ${photo ? `<img src="${esc(photo)}" alt="Фото чая: ${esc(form.nameRU)}" width="130" height="130" />` : ''}
+          ${photo ? `<img src="${esc(photo)}" alt="${esc(T('card.photoAlt', { name: form.nameRU }))}" width="130" height="130" />` : ''}
           <dl>
-            ${filled(form.type) ? `<dt>Тип чая</dt><dd>${esc(form.type)}</dd>` : ''}
-            ${filled(form.country) ? `<dt>Страна</dt><dd>${esc(form.country)}</dd>` : ''}
-            ${form.averageRating != null ? `<dt>Оценка</dt><dd>${esc(form.averageRating)}/10</dd>` : ''}
-            ${author ? `<dt>Автор</dt><dd>${esc(author.nickname || author.name)}</dd>` : ''}
+            ${filled(form.type) ? `<dt>${esc(T('card.teaType'))}</dt><dd>${esc(teaTypeName(form.type, locale))}</dd>` : ''}
+            ${filled(form.country) ? `<dt>${esc(T('tasting.country'))}</dt><dd>${esc(translateOption(form.country, locale))}</dd>` : ''}
+            ${form.averageRating != null ? `<dt>${esc(T('card.ratingLabel'))}</dt><dd>${esc(form.averageRating)}/10</dd>` : ''}
+            ${author ? `<dt>${esc(T('card.author'))}</dt><dd>${esc(author.nickname || author.name)}</dd>` : ''}
           </dl>
           <p><time datetime="${esc(new Date(form.createdAt).toISOString())}">${esc(new Date(form.createdAt).toISOString().slice(0, 10))}</time></p>
         </article>
@@ -182,16 +230,17 @@ const renderFeed = async (req, res, next) => {
       itemListElement: forms.map((form, i) => ({
         '@type': 'ListItem',
         position: (page_ - 1) * FEED_LIMIT + i + 1,
-        url: `${ORIGIN}${formUrl(form)}`,
+        url: `${ORIGIN}${localizePath(formUrl(form), locale)}`,
         name: form.nameRU,
       })),
     };
 
+    const pageHref = (n) => esc(localizePath(pageUrl(n), locale));
     const pagination = pages > 1
-      ? `    <nav aria-label="Страницы">
-      ${page_ > 1 ? `<a rel="prev" href="${esc(pageUrl(page_ - 1))}">Назад</a>` : ''}
-      <span>Страница ${page_} из ${pages}</span>
-      ${page_ < pages ? `<a rel="next" href="${esc(pageUrl(page_ + 1))}">Вперёд</a>` : ''}
+      ? `    <nav aria-label="${esc(T('feed.pages'))}">
+      ${page_ > 1 ? `<a rel="prev" href="${pageHref(page_ - 1)}">${esc(T('feed.prev'))}</a>` : ''}
+      <span>${esc(T('feed.pageOf', { page: page_, pages }))}</span>
+      ${page_ < pages ? `<a rel="next" href="${pageHref(page_ + 1)}">${esc(T('feed.next'))}</a>` : ''}
     </nav>`
       : '';
 
@@ -202,12 +251,13 @@ const renderFeed = async (req, res, next) => {
         // Canonical keeps ?page but drops ?sort — the same tastings reordered
         // are the same page, and each sort would otherwise be a near-duplicate.
         path: pageUrl(page_),
+        locale,
         jsonLd,
       },
       body: `    <h1>${esc(heading)}</h1>
     <p>${esc(description)}</p>
     <ul>
-${items || '      <li>Пока ничего не опубликовано.</li>'}
+${items || `      <li>${esc(T('card.nothingPublished'))}</li>`}
     </ul>
 ${pagination}`,
     }));
@@ -222,6 +272,8 @@ ${pagination}`,
 const renderForm = async (req, res, next) => {
   try {
     const { slugOrId } = req.params;
+    const locale = localeOf(req);
+    const T = (key, vars) => translate(key, locale, vars);
     const form = await TeaForm.findOne(publicFormFilter(slugOrId))
       .populate('owner', 'name nickname avatar');
 
@@ -230,17 +282,17 @@ const renderForm = async (req, res, next) => {
     // one of these, which is how a site accumulates thousands of soft 404s.
     if (!form) {
       return send(res, page({
-        meta: { title: 'Запись не найдена', path: req.originalUrl, noIndex: true },
-        body: '    <h1>Запись не найдена</h1>\n    <p><a href="/blog">Все дегустации</a></p>',
+        meta: { title: T('error.recordNotFound'), path: publicPath(req), noIndex: true, locale },
+        body: `    <h1>${esc(T('error.recordNotFound'))}</h1>\n    <p><a href="${esc(localizePath('/blog', locale))}">${esc(T('error.allTastings'))}</a></p>`,
       }), 404);
     }
 
     // Reached by an address that is not the canonical one — an old /blog/<uuid>
     // link, or the slug before a rename. Redirect rather than serve the page
-    // twice under two URLs.
+    // twice under two URLs — and stay in the language it was reached in.
     const canonical = formUrl(form);
     if (`/blog/${slugOrId}` !== canonical) {
-      return res.redirect(301, canonical);
+      return res.redirect(301, localizePath(canonical, locale));
     }
 
     const [brewings, aromas, tastes] = await Promise.all([
@@ -272,12 +324,15 @@ const renderForm = async (req, res, next) => {
         .map((t) => descriptorPath(t, 'tasteStage'))
         .filter(Boolean);
 
+      // The descriptors are stored in Russian; only their display is
+      // translated. The taster's own free-text description is never touched.
+      const tr = (p) => esc(translateDescriptorPath(p, locale));
       return `      <section>
-        <h3>Пролив №${esc(brew.brewingCount)}${brew.brewingRating != null ? ` — ${esc(brew.brewingRating)}/10` : ''}</h3>
-        ${filled(brew.brewingTime) && brew.brewingTime !== '00:00:00' ? `<p>Время заваривания: ${esc(brew.brewingTime)}</p>` : ''}
+        <h3>${esc(T('tasting.steep', { n: brew.brewingCount }))}${brew.brewingRating != null ? ` — ${esc(brew.brewingRating)}/10` : ''}</h3>
+        ${filled(brew.brewingTime) && brew.brewingTime !== '00:00:00' ? `<p>${esc(T('tasting.steepTime'))}: ${esc(brew.brewingTime)}</p>` : ''}
         ${filled(brew.description) ? `<p>${esc(brew.description)}</p>` : ''}
-        ${aromaPaths.length ? `<p>Аромат: ${aromaPaths.map(esc).join('; ')}</p>` : ''}
-        ${tastePaths.length ? `<p>Вкус: ${tastePaths.map(esc).join('; ')}</p>` : ''}
+        ${aromaPaths.length ? `<p>${esc(T('tasting.aroma'))}: ${aromaPaths.map(tr).join('; ')}</p>` : ''}
+        ${tastePaths.length ? `<p>${esc(T('tasting.taste'))}: ${tastePaths.map(tr).join('; ')}</p>` : ''}
       </section>`;
     }).join('\n');
 
@@ -286,33 +341,34 @@ const renderForm = async (req, res, next) => {
     return send(res, page({
       meta: {
         title: form.nameRU,
-        description: formDescription(form, brewings),
+        description: formDescription(form, brewings, locale),
         image: preview,
         path: canonical,
         type: 'article',
-        jsonLd: formJsonLd(form, brewings, preview),
+        locale,
+        jsonLd: formJsonLd(form, brewings, preview, locale),
       },
       body: `    <article>
       <h1>${esc(form.nameRU)}</h1>
-      ${preview ? `<img src="${esc(preview)}" alt="Фото чая: ${esc(form.nameRU)}" />` : ''}
-      <p>${author ? `${esc(author.nickname || author.name)} · ` : ''}<time datetime="${esc(new Date(form.createdAt).toISOString())}">${esc(new Date(form.createdAt).toISOString().slice(0, 10))}</time>${form.averageRating != null ? ` · ${esc(form.averageRating)}/10 пиал` : ''}</p>
+      ${preview ? `<img src="${esc(preview)}" alt="${esc(T('card.photoAlt', { name: form.nameRU }))}" />` : ''}
+      <p>${author ? `${esc(author.nickname || author.name)} · ` : ''}<time datetime="${esc(new Date(form.createdAt).toISOString())}">${esc(new Date(form.createdAt).toISOString().slice(0, 10))}</time>${form.averageRating != null ? ` · ${esc(T('tasting.bowls', { n: form.averageRating }))}` : ''}</p>
       <dl>
 ${[
-    metaRow('Тип чая', form.type),
-    metaRow('Страна', form.country),
-    metaRow('Магазин', form.shop),
-    metaRow('Вес', form.weight != null ? `${form.weight} г` : ''),
-    metaRow('Вода', form.water),
-    metaRow('Объем воды', form.volume != null ? `${form.volume} мл` : ''),
-    metaRow('Температура воды', form.temperature != null ? `${form.temperature} °C` : ''),
-    metaRow('Цена за грамм', form.price != null ? `${form.price} ₽` : ''),
-    metaRow('Посуда', form.teaware),
-    metaRow('Метод заваривания', form.brewingtype),
+    metaRow(T('card.teaType'), teaTypeName(form.type, locale)),
+    metaRow(T('tasting.country'), translateOption(form.country, locale)),
+    metaRow(T('tasting.shop'), form.shop),
+    metaRow(T('tasting.weight'), form.weight != null ? `${form.weight} ${T('unit.gram')}` : ''),
+    metaRow(T('tasting.water'), form.water),
+    metaRow(T('tasting.volume'), form.volume != null ? `${form.volume} ${T('unit.ml')}` : ''),
+    metaRow(T('tasting.temperature'), form.temperature != null ? `${form.temperature} °C` : ''),
+    metaRow(T('tasting.price'), form.price != null ? `${form.price} ₽` : ''),
+    metaRow(T('tasting.teaware'), translateOption(form.teaware, locale)),
+    metaRow(T('tasting.brewingMethod'), translateOption(form.brewingtype, locale)),
   ].filter(Boolean).join('\n')}
       </dl>
 ${brewSections}
-      ${typeHub ? `<p><a href="/blog/type/${typeHub.slug}">Все дегустации: ${esc(typeHub.short)}</a></p>` : ''}
-      <p><a href="/blog">← Все публичные формы</a></p>
+      ${typeHub ? `<p><a href="${esc(localizePath(`/blog/type/${typeHub.slug}`, locale))}">${esc(T('tasting.allOfType', { type: teaTypeShort(typeHub, locale) }))}</a></p>` : ''}
+      <p><a href="${esc(localizePath('/blog', locale))}">${esc(T('tasting.backToFeed'))}</a></p>
     </article>`,
     }));
   } catch (err) {
@@ -323,31 +379,43 @@ ${brewSections}
 };
 
 // GET /render/ — the landing page.
-const renderHome = (req, res) => send(res, page({
-  meta: {
-    title: '',
-    description: 'Дневник чайных дегустаций: аромат, вкус и проливы, фото и голосовые заметки. Ведите свои записи и читайте дегустации других.',
-    path: '/',
-    jsonLd: {
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: SITE,
-      url: `${ORIGIN}/`,
-      inLanguage: 'ru-RU',
-      description: 'Дневник чайных дегустаций',
-      publisher: {
-        '@type': 'Organization',
-        name: SITE,
+const renderHome = (req, res) => {
+  const locale = localeOf(req);
+  const T = (key, vars) => translate(key, locale, vars);
+  const u = (path) => esc(localizePath(path, locale));
+
+  return send(res, page({
+    meta: {
+      title: '',
+      description: T('landing.description'),
+      path: '/',
+      locale,
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: T('site.name'),
         url: `${ORIGIN}/`,
-        logo: `${ORIGIN}/logo512.png`,
+        inLanguage: LOCALE_TAG[locale],
+        description: T('site.tagline'),
+        publisher: {
+          '@type': 'Organization',
+          name: T('site.name'),
+          url: `${ORIGIN}/`,
+          logo: `${ORIGIN}/logo512.png`,
+        },
       },
     },
-  },
-  body: `    <h1>Форма чая — дневник чайных дегустаций</h1>
-    <p>Записывайте, как заварился чай: аромат и вкус по проливам, температура, посуда и время,
-       фотографии сухого листа, настоя и мокрого листа. Надиктуйте заметку голосом — расшифровка
-       и разбор по полям сделаются сами.</p>
-    <p><a href="/blog">Читать дегустации</a> · <a href="/sign-up">Завести свой дневник</a></p>`,
-}));
+    body: `    <h1>${esc(T('landing.title'))}</h1>
+    <p>${esc(T('landing.lead'))}</p>
+    <p><a href="${u('/blog')}">${esc(T('landing.readTastings'))}</a> · <a href="${u('/sign-up')}">${esc(T('landing.startDiary'))}</a></p>
+    <h2>${esc(T('landing.howItWorks'))}</h2>
+    <ol>
+      <li>${esc(T('landing.step1'))}</li>
+      <li>${esc(T('landing.step2'))}</li>
+      <li>${esc(T('landing.step3'))}</li>
+      <li>${esc(T('landing.step4'))}</li>
+    </ol>`,
+  }));
+};
 
 module.exports = { renderHome, renderFeed, renderForm };

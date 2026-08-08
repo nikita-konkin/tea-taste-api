@@ -6,6 +6,8 @@ const {
   newPkce, authorizeUrl, exchangeCode, fetchUserInfo,
 } = require('../utils/vkid');
 const { isRegistrationOpen } = require('../utils/settings');
+const { t } = require('../utils/apiMessages');
+const { LOCALES, DEFAULT_LOCALE, localizePath } = require('../utils/locale');
 
 const STATE_COOKIE_MS = 10 * 60 * 1000;
 
@@ -25,15 +27,31 @@ const stateCookieOpts = () => ({
   sameSite: 'lax', // must survive the top-level redirect back from id.vk.com
 });
 
+// Which language the user was reading when they left for VK.
+//
+// This is a top-level browser redirect, not a fetch, so there is no X-Locale
+// header to read and req.locale would fall back to whatever the browser's
+// Accept-Language happens to say — which is exactly the guess the URL prefix
+// exists to override. So the app passes ?locale= on the way out and we park it
+// next to the PKCE material, which already has to survive the round trip.
+//
+// Untrusted like any query parameter: an exact match against the known locales
+// or nothing.
+const localeFromQuery = (req) => {
+  const asked = String(req.query.locale || '').trim().toLowerCase();
+  return LOCALES.includes(asked) ? asked : DEFAULT_LOCALE;
+};
+
 // GET /auth/vk — send the user to VK ID with fresh PKCE material.
 module.exports.startVkAuth = (req, res, next) => {
   if (!process.env.VK_CLIENT_ID) {
-    return next({ message: 'Вход через VK не настроен.', statusCode: 503 });
+    return next({ message: t(req, 'api.vkNotConfigured'), statusCode: 503 });
   }
 
   const { verifier, challenge, state } = newPkce();
   res.cookie('vk_state', state, stateCookieOpts());
   res.cookie('vk_pkce', verifier, stateCookieOpts());
+  res.cookie('vk_locale', localeFromQuery(req), stateCookieOpts());
 
   return res.redirect(authorizeUrl({
     clientId: process.env.VK_CLIENT_ID,
@@ -50,12 +68,19 @@ module.exports.vkCallback = async (req, res) => {
   const { code, state, device_id: deviceId } = req.query;
   const savedState = req.cookies.vk_state;
   const verifier = req.cookies.vk_pkce;
+  const locale = LOCALES.includes(req.cookies.vk_locale) ? req.cookies.vk_locale : DEFAULT_LOCALE;
   res.clearCookie('vk_state');
   res.clearCookie('vk_pkce');
+  res.clearCookie('vk_locale');
+
+  // Every exit from here goes back to the language the user left in — landing
+  // an English reader on a Russian error page is a worse failure than the one
+  // being reported.
+  const back = (path) => `${frontendBase()}${localizePath(path, locale)}`;
 
   const fail = (reason) => {
     console.error('VK auth failed:', reason);
-    return res.redirect(`${frontendBase()}/sign-in?vk_error=1`);
+    return res.redirect(`${back('/sign-in')}?vk_error=1`);
   };
 
   if (!code || !state || !savedState || !verifier || state !== savedState) {
@@ -91,7 +116,7 @@ module.exports.vkCallback = async (req, res) => {
       // stops the half of sign-ups that go through the form. Accounts that
       // already exist — matched by vkId or linked by email above — still get in.
       if (!await isRegistrationOpen()) {
-        return res.redirect(`${frontendBase()}/sign-in?vk_error=closed`);
+        return res.redirect(`${back('/sign-in')}?vk_error=closed`);
       }
 
       // VK-only account: satisfy the required password with a random one
@@ -102,6 +127,7 @@ module.exports.vkCallback = async (req, res) => {
         email: email || `vk${vkId}@vkid.local`,
         password: randomPassword,
         vkId,
+        language: locale,
         ...(info.avatar ? { avatar: info.avatar } : {}),
       });
     }
@@ -117,7 +143,10 @@ module.exports.vkCallback = async (req, res) => {
       domain: NODE_ENV == 'production' ? '.teaform.ru' : '',
     });
 
-    return res.redirect(`${frontendBase()}/oauth/vk`);
+    // An existing account's own stored preference wins over the page they
+    // happened to click the button on; a brand-new one has just been given
+    // that page's language, so the two agree.
+    return res.redirect(`${frontendBase()}${localizePath('/oauth/vk', user.language || locale)}`);
   } catch (err) {
     return fail(err.message);
   }

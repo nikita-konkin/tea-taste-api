@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const { isRegistrationOpen, REGISTRATION_CLOSED_MESSAGE } = require('../utils/settings');
+const { t } = require('../utils/apiMessages');
 
 const { NODE_ENV, JWT_SECRET } = process.env;
 
@@ -10,12 +11,12 @@ module.exports.loginUser = (req, res, next) => {
 
   User.findOne({ email }).select('+password')
     .then((user) => {
-      if (!user) throw new Error('Неправильные почта или пароль');
+      if (!user) throw new Error(t(req, 'api.wrongCredentials'));
 
       return bcrypt.compare(password, user.password).then((matched) => ({ matched, user }));
     })
     .then(({ matched, user }) => {
-      if (!matched) throw new Error('Неправильные почта или пароль');
+      if (!matched) throw new Error(t(req, 'api.wrongCredentials'));
 
       const token = jwt.sign(
         { _id: user._id },
@@ -30,7 +31,12 @@ module.exports.loginUser = (req, res, next) => {
         // sameSite: 'None',
       });
 
-      res.status(200).json({ ok: true, message: 'Login successful', token });
+      // The stored language rides back on the sign-in response so the app can
+      // land the user in it without a second round trip. '' for the accounts
+      // that never said — the app treats that as "leave them where they are".
+      res.status(200).json({
+        ok: true, message: 'Login successful', token, language: user.language || '',
+      });
     })
     .catch((err) => {
       console.error(err);
@@ -52,17 +58,21 @@ module.exports.createUser = (req, res, next) => {
       }
       return bcrypt.hash(password, 10);
     })
-    .then((hash) => User.create({ name, email, password: hash }))
+    // The language the sign-up form was read in is the best evidence we will
+    // ever have of what this account wants, and it costs nothing to keep.
+    .then((hash) => User.create({
+      name, email, password: hash, language: req.locale,
+    }))
     .then(() => res.send({ data: { name, email } }))
     .catch((err) => {
       if (err.statusCode) {
         return next({ message: err.message, statusCode: err.statusCode });
       } else if (err.name === 'ValidationError') {
-        return next({ message: 'Переданы некорректные данные при создании карточки.', statusCode: 400 });
+        return next({ message: t(req, 'api.badData'), statusCode: 400 });
       } else if (err.code === 11000) {
-        return next({ message: 'Пользователь уже зарегистрирован по данному email.', statusCode: 409 });
+        return next({ message: t(req, 'api.emailTaken'), statusCode: 409 });
       } else {
-        return next({ message: 'Ошибка по умолчанию.', statusCode: 500 });
+        return next({ message: t(req, 'api.default'), statusCode: 500 });
       }
     });
 };
@@ -78,6 +88,6 @@ module.exports.logoutUser = (req, res, next) => {
 
     res.status(200).json({ ok: true, message: 'LogOut successful' });
   } catch (err) {
-    next({ message: '401 - Необходима авторизация.', statusCode: 401 });
+    next({ message: t(req, 'api.authRequired'), statusCode: 401 });
   }
 };

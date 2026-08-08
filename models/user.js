@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
+const { LOCALES } = require('../utils/locale');
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -67,6 +68,16 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['user', 'admin'],
     default: 'user',
+  },
+  // Preferred reading language, applied when signing in lands the user on a
+  // URL that does not name a language of its own. Deliberately has no default:
+  // unset means "never said", which is what every account predating this field
+  // is, and what keeps sign-in leaving those users exactly where it used to.
+  // Storing 'ru' as a default would be a lie about the same state.
+  language: {
+    type: String,
+    enum: LOCALES,
+    required: false,
   },
   // Recognition is billed to the service owner per 15 seconds of audio, so the
   // monthly allowance is counted here rather than trusted to the client.

@@ -14,6 +14,8 @@ const { extractFromTranscript } = require("../utils/extractForm");
 const { buildSlug, looksLikeUuid, isDuplicateSlug } = require("../utils/slugify");
 const { orderedPhotoUrls } = require("../utils/photos");
 const { teaTypeSlugs } = require("../utils/teaTypes");
+const { LOCALES, DEFAULT_LOCALE, LOCALE_TAG, localizePath } = require("../utils/locale");
+const { t } = require('../utils/apiMessages');
 
 // Only `segments` is the client's to send. Everything else under `voice` —
 // the merged track, the transcript, the recognition status and operation id —
@@ -132,13 +134,11 @@ module.exports.createTeaForm = (req, res, next) => {
     })
     .catch((err) => {
       if (err.name === "ValidationError") {
-        const e = new Error(
-          "400 — Переданы некорректные данные."
-        );
+        const e = new Error(t(req, 'api.badData'));
         e.statusCode = 400;
         next(e);
       } else {
-        const e = new Error("500 — Ошибка по умолчанию.");
+        const e = new Error(t(req, 'api.default'));
         e.statusCode = 500;
         next(e);
       }
@@ -245,31 +245,32 @@ module.exports.getSitemap = async (req, res, next) => {
       ? (newest.updatedAt || newest.createdAt).toISOString().slice(0, 10)
       : undefined;
 
-    const urls = [
+    // One entry per page, written as a BARE path; each is emitted once per
+    // language below.
+    const pages = [
       // The root was missing entirely — it is the page that explains what the
       // site is, and the one most likely to rank for the site's own name.
-      {
-        loc: `${SITE}/`, priority: '1.0', changefreq: 'weekly', lastmod: feedLastmod,
-      },
-      {
-        loc: `${SITE}/blog`, priority: '0.9', changefreq: 'daily', lastmod: feedLastmod,
-      },
+      { path: '/', priority: '1.0', changefreq: 'weekly', lastmod: feedLastmod },
+      { path: '/blog', priority: '0.9', changefreq: 'daily', lastmod: feedLastmod },
       // One hub per tea type. Listed unconditionally: a type with nothing in it
       // yet is a page that will fill up, and dropping it from the sitemap only
       // delays the day it is crawled.
       ...teaTypeSlugs.map((t) => ({
-        loc: `${SITE}/blog/type/${t.slug}`,
+        path: `/blog/type/${t.slug}`,
         priority: '0.8',
         changefreq: 'weekly',
         lastmod: feedLastmod,
       })),
       ...forms.map((form) => ({
-        loc: `${SITE}/blog/${form.slug || form.sessionId}`,
+        path: `/blog/${form.slug || form.sessionId}`,
         lastmod: (form.updatedAt || form.createdAt || new Date()).toISOString().slice(0, 10),
         priority: '0.7',
         changefreq: 'monthly',
         // Tea photography is a real way into a site like this through image
         // search, and nothing else on the site declares these pictures exist.
+        // Declared on the Russian entry only — it is the same photograph in all
+        // three languages, and listing it three times would ask the crawler to
+        // fetch it three times to learn that.
         images: orderedPhotoUrls(form.photos).map((url) => ({
           loc: `${SITE}${url}`,
           title: form.nameRU,
@@ -277,14 +278,32 @@ module.exports.getSitemap = async (req, res, next) => {
       })),
     ];
 
+    // Every page in every language, each entry naming its own translations.
+    //
+    // The xhtml:link alternates matter as much as the extra URLs: without them
+    // the three copies of a page compete with each other, and the engine picks
+    // one — usually not the one matching the reader's language.
+    const urls = pages.flatMap((entry) => LOCALES.map((locale) => ({
+      ...entry,
+      loc: `${SITE}${localizePath(entry.path, locale)}`,
+      images: locale === DEFAULT_LOCALE ? entry.images : [],
+      alternates: [
+        ...LOCALES.map((l) => ({ hreflang: LOCALE_TAG[l], href: `${SITE}${localizePath(entry.path, l)}` })),
+        { hreflang: 'x-default', href: `${SITE}${localizePath(entry.path, DEFAULT_LOCALE)}` },
+      ],
+    })));
+
     const body = urls.map(({
-      loc, lastmod, priority, changefreq, images,
+      loc, lastmod, priority, changefreq, images, alternates,
     }) => [
       '  <url>',
       `    <loc>${xmlEscape(loc)}</loc>`,
       lastmod ? `    <lastmod>${lastmod}</lastmod>` : '',
       `    <changefreq>${changefreq}</changefreq>`,
       `    <priority>${priority}</priority>`,
+      ...(alternates || []).map((alt) => (
+        `    <xhtml:link rel="alternate" hreflang="${xmlEscape(alt.hreflang)}" href="${xmlEscape(alt.href)}" />`
+      )),
       ...(images || []).map((img) => [
         '    <image:image>',
         `      <image:loc>${xmlEscape(img.loc)}</image:loc>`,
@@ -294,11 +313,13 @@ module.exports.getSitemap = async (req, res, next) => {
       '  </url>',
     ].filter(Boolean).join('\n')).join('\n');
 
+    // The xhtml namespace is what makes the hreflang alternates above legal —
+    // without the declaration the whole sitemap fails validation.
     res.type('application/xml').send(
-      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${body}\n</urlset>\n`,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${body}\n</urlset>\n`,
     );
   } catch (err) {
-    const e = new Error('500 — Ошибка по умолчанию.');
+    const e = new Error(t(req, 'api.default'));
     e.statusCode = 500;
     next(e);
   }
@@ -323,7 +344,7 @@ module.exports.getPublicTeaFormById = (req, res, next) => {
   TeaForm.findOne(publicFormFilter(req.params.sessionId))
     .populate('owner', 'name nickname avatar')
     .orFail(() => {
-      const e = new Error('404 — Запись не найдена.');
+      const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
       return e;
     })
@@ -443,7 +464,7 @@ module.exports.patchTeaForm = (req, res, next) => {
       if (!form && publicAccess === true) {
         const blockedForm = await TeaForm.findOne({ sessionId, owner }).select("blocked");
         if (blockedForm && blockedForm.blocked) {
-          const e = new Error("Запись скрыта администратором и не может быть опубликована.");
+          const e = new Error(t(req, 'api.blockedCannotPublish'));
           e.statusCode = 403;
           throw e;
         }
@@ -473,13 +494,11 @@ module.exports.patchTeaForm = (req, res, next) => {
       if (err.statusCode) {
         next(err);
       } else if (err.name === "ValidationError") {
-        const e = new Error(
-          "400 — Переданы некорректные данные."
-        );
+        const e = new Error(t(req, 'api.badData'));
         e.statusCode = 400;
         next(e);
       } else {
-        const e = new Error("500 — Ошибка по умолчанию.");
+        const e = new Error(t(req, 'api.default'));
         e.statusCode = 500;
         next(e);
       }
@@ -493,7 +512,7 @@ module.exports.getVoiceStatus = (req, res, next) => {
   TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
     .select("voice")
     .orFail(() => {
-      const e = new Error("404 — Запись не найдена.");
+      const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
       return e;
     })
@@ -510,7 +529,7 @@ module.exports.getVoiceStatus = (req, res, next) => {
     })
     .catch((err) => {
       if (err.statusCode) return next(err);
-      const e = new Error("500 — Ошибка по умолчанию.");
+      const e = new Error(t(req, 'api.default'));
       e.statusCode = 500;
       return next(e);
     });
@@ -524,14 +543,14 @@ module.exports.retryVoice = (req, res, next) => {
   TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
     .select("voice")
     .orFail(() => {
-      const e = new Error("404 — Запись не найдена.");
+      const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
       return e;
     })
     .then((form) => {
       const segments = (form.voice && form.voice.segments) || [];
       if (!segments.length) {
-        const e = new Error("У этой дегустации нет записей.");
+        const e = new Error(t(req, 'api.noRecordings'));
         e.statusCode = 409;
         throw e;
       }
@@ -548,7 +567,7 @@ module.exports.retryVoice = (req, res, next) => {
     })
     .catch((err) => {
       if (err.statusCode) return next(err);
-      const e = new Error("500 — Ошибка по умолчанию.");
+      const e = new Error(t(req, 'api.default'));
       e.statusCode = 500;
       return next(e);
     });
@@ -561,7 +580,7 @@ module.exports.extractFromVoice = (req, res, next) => {
   TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
     .select("voice")
     .orFail(() => {
-      const e = new Error("404 — Запись не найдена.");
+      const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
       return e;
     })
@@ -613,7 +632,7 @@ module.exports.extractFromVoice = (req, res, next) => {
     })
     .catch((err) => {
       if (err.statusCode) return next(err);
-      const e = new Error("500 — Ошибка по умолчанию.");
+      const e = new Error(t(req, 'api.default'));
       e.statusCode = 500;
       return next(e);
     });

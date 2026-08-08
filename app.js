@@ -9,6 +9,8 @@ const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
 const { isCelebrateError } = require('celebrate');
 const auth = require('./middlewares/auth');
+const locale = require('./middlewares/locale');
+const { tFor } = require('./utils/apiMessages');
 const { hasFfmpeg } = require('./utils/audio');
 const { resume: resumeVoiceJobs } = require('./utils/voiceJob');
 
@@ -33,7 +35,7 @@ const limiter = rateLimit({
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Слишком много запросов с этого IP-адреса. Повторите попытку позже.',
+  message: tFor('api.tooManyRequests'),
 });
 
 const authLimiter = rateLimit({
@@ -41,11 +43,14 @@ const authLimiter = rateLimit({
   max: 25,
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Слишком много попыток входа. Повторите попытку позже.',
+  message: tFor('api.tooManyLogins'),
 });
 
 // Middleware
 app.use(helmet());
+// Sets req.locale for the error messages below. First, so nothing can answer
+// before the language is known.
+app.use(locale);
 app.use(limiter);
 app.use(['/sign-in', '/sign-up', '/password-reset'], authLimiter);
 app.use(logger('dev'));

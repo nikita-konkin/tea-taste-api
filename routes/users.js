@@ -13,6 +13,7 @@ const {
 } = require('../controllers/users');
 
 const { uploadAvatar } = require('../middlewares/upload');
+const { LOCALES } = require('../utils/locale');
 
 // Same password rules as at sign-up (see routes/signs.js).
 const passwordSchema = Joi.string()
@@ -43,6 +44,10 @@ router.patch('/profile/me', celebrate({
       Joi.string().uri({ scheme: ['http', 'https'] }),
       Joi.string().pattern(/^\/[^\s]+$/), // site-relative path (uploaded avatar)
     ).allow(''),
+    // '' clears the preference back to "never said" — the same $unset the
+    // other optional fields get. Anything outside the three we serve is
+    // rejected here rather than stored and puzzled over at sign-in.
+    language: Joi.string().valid(...LOCALES).allow(''),
   }).min(1),
 }), updateUserProfile);
 

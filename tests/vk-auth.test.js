@@ -33,9 +33,11 @@ const vkFetchMock = (userInfo) => jest.fn()
   });
 
 // Walks /auth/vk to get valid state/pkce cookies, then hits the callback.
-const runCallback = async (agentApp, userInfo) => {
+// `locale` is what the app appends when the user was reading /en or /zh — this
+// is a top-level browser redirect, so there is no X-Locale header to carry it.
+const runCallback = async (agentApp, userInfo, locale) => {
   process.env.VK_CLIENT_ID = '12345';
-  const start = await request(agentApp).get('/auth/vk');
+  const start = await request(agentApp).get(`/auth/vk${locale ? `?locale=${locale}` : ''}`);
   const cookies = start.headers['set-cookie'];
   const state = cookies.find((c) => c.startsWith('vk_state=')).split(';')[0].split('=')[1];
 
@@ -113,5 +115,44 @@ describe('GET /auth/vk/callback', () => {
     await runCallback(app, { user_id: 999, first_name: 'Без', last_name: 'Почты' });
     const user = await User.findOne({ vkId: '999' });
     expect(user.email).toBe('vk999@vkid.local');
+  });
+});
+
+// Without this the round trip through id.vk.com is where an English reader
+// loses their language: they leave from /en/sign-in and come back to a Russian
+// site, having been given a Russian account on the way.
+describe('the language survives the VK round trip', () => {
+  test('a new account keeps the language it signed up in, and lands there', async () => {
+    const res = await runCallback(app, { user_id: 555, first_name: 'New', last_name: 'Reader' }, 'en');
+    expect(res.headers.location).toContain('/en/oauth/vk');
+    expect((await User.findOne({ vkId: '555' })).language).toBe('en');
+  });
+
+  test('an existing account is returned to its own saved language, not the page it clicked from', async () => {
+    await runCallback(app, { user_id: 556, first_name: 'Zh', last_name: 'Reader' }, 'zh');
+    const res = await runCallback(app, { user_id: 556, first_name: 'Zh', last_name: 'Reader' }, 'en');
+    expect(res.headers.location).toContain('/zh/oauth/vk');
+  });
+
+  test('Russian keeps the bare path', async () => {
+    const res = await runCallback(app, { user_id: 557, first_name: 'Ru', last_name: 'Reader' }, 'ru');
+    expect(res.headers.location).toMatch(/\/oauth\/vk$/);
+    expect(res.headers.location).not.toContain('/ru/');
+  });
+
+  test('a bogus locale is ignored rather than reflected into the redirect', async () => {
+    const res = await runCallback(app, { user_id: 558, first_name: 'X', last_name: 'Y' }, '../evil');
+    expect(res.headers.location).toMatch(/\/oauth\/vk$/);
+    expect((await User.findOne({ vkId: '558' })).language).toBe('ru');
+  });
+
+  test('a failure sends the reader back to sign-in in their own language', async () => {
+    process.env.VK_CLIENT_ID = '12345';
+    const start = await request(app).get('/auth/vk?locale=zh');
+    const cookies = start.headers['set-cookie'].map((c) => c.split(';')[0]).join('; ');
+    const res = await request(app)
+      .get('/auth/vk/callback?code=abc&state=wrong-state')
+      .set('Cookie', cookies);
+    expect(res.headers.location).toContain('/zh/sign-in');
   });
 });
