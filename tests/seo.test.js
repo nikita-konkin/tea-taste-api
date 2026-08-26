@@ -169,6 +169,31 @@ describe('GET /render/blog/:slugOrId — one tasting', () => {
     expect(res.text).toContain('href="/blog/type/ulun"');
   });
 
+  // Both are new sections on the page rather than rows in the <dl>, and the
+  // dry-leaf aromas hang off brewing 0, which no <section> loop would reach.
+  test('prints the overall description and the dry-leaf aroma', async () => {
+    await request(app).patch(`/create-form/${SID}`).set('Cookie', cookie).send({
+      ...formBody,
+      description: 'Плотный и маслянистый.',
+      dryAromaDescription: 'Из пакета — тёплая выпечка.',
+    });
+    await request(app).post(`/my-aromas/${SID}/brew/0/aroma/1`).set('Cookie', cookie)
+      .send({ aromaStage1: 'Древесный', aromaStage2: 'Кора', publicAccess: true });
+
+    const res = await request(app).get(`/render/blog/${slug}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Плотный и маслянистый.');
+    expect(res.text).toContain('Из пакета — тёплая выпечка.');
+    expect(res.text).toContain('Древесный → Кора');
+  });
+
+  test('the dry-leaf aroma is translated like any other descriptor', async () => {
+    const res = await request(app).get(`/render/en/blog/${slug}`);
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Dry leaf aroma');
+    expect(res.text).not.toContain('<h2>Аромат сухого чая</h2>');
+  });
+
   test('a sessionId URL 301s to the slug', async () => {
     const res = await request(app).get(`/render/blog/${SID}`);
     expect(res.status).toBe(301);

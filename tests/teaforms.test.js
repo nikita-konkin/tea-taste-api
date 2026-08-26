@@ -111,6 +111,91 @@ describe('tea form CRUD', () => {
   });
 });
 
+// Everything said about the tea before the first pour, and about it as a whole.
+// The dry-leaf aromas are ordinary Aroma documents on brewing 0 — the wizard
+// posts them there so nothing that walks the проливы picks them up by mistake.
+describe('the dry leaf and the tasting as a whole', () => {
+  const DID = 'ab4d5e6f-1122-4333-8444-556677889900';
+
+  const read = async () => {
+    const res = await request(app).get(`/my-form/${DID}`).set('Cookie', cookieA);
+    return res.body.data[0];
+  };
+
+  beforeAll(async () => {
+    await request(app).post(`/create-form/${DID}`).set('Cookie', cookieA).send({
+      ...formBody,
+      nameRU: 'Сухой лист',
+      description: 'Плотный, маслянистый, стоит своих денег.',
+      dryAromaDescription: 'Из пакета — тёплая выпечка и сухофрукты.',
+    });
+  });
+
+  test('POST stores both free-text fields', async () => {
+    const form = await read();
+    expect(form.description).toBe('Плотный, маслянистый, стоит своих денег.');
+    expect(form.dryAromaDescription).toBe('Из пакета — тёплая выпечка и сухофрукты.');
+  });
+
+  test('PATCH rewrites them, and an empty string clears one', async () => {
+    await request(app).patch(`/create-form/${DID}`).set('Cookie', cookieA)
+      .send({ ...formBody, description: 'Передумал: слишком терпкий.', dryAromaDescription: '' });
+
+    const form = await read();
+    expect(form.description).toBe('Передумал: слишком терпкий.');
+    expect(form.dryAromaDescription).toBe('');
+  });
+
+  test('a form created without them simply has neither', async () => {
+    const SID_BARE = 'cc4d5e6f-1122-4333-8444-556677889911';
+    await request(app).post(`/create-form/${SID_BARE}`).set('Cookie', cookieA)
+      .send({ nameRU: 'Без описания' });
+
+    const res = await request(app).get(`/my-form/${SID_BARE}`).set('Cookie', cookieA);
+    expect(res.body.data[0].description).toBeUndefined();
+    expect(res.body.data[0].dryAromaDescription).toBeUndefined();
+
+    await request(app).delete(`/my-form/${SID_BARE}`).set('Cookie', cookieA);
+  });
+
+  test('text beyond the limit is rejected rather than truncated', async () => {
+    const res = await request(app).patch(`/create-form/${DID}`).set('Cookie', cookieA)
+      .send({ ...formBody, description: 'я'.repeat(2001) });
+    expect(res.status).toBe(400);
+  });
+
+  test('the dry-leaf aroma is stored on brewing 0 and reads back', async () => {
+    const post = await request(app)
+      .post(`/my-aromas/${DID}/brew/0/aroma/1`)
+      .set('Cookie', cookieA)
+      .send({ aromaStage1: 'Древесный', aromaStage2: 'Кора', aromaStage3: 'Дуб', publicAccess: true });
+    expect(post.status).toBe(200);
+
+    const res = await request(app).get(`/my-aromas/${DID}`).set('Cookie', cookieA);
+    const dry = res.body.data.filter((a) => a.brewingCount === 0);
+    expect(dry).toHaveLength(1);
+    expect(dry[0].aromaStage1).toBe('Древесный');
+    expect(dry[0].aromaCount).toBe(1);
+  });
+
+  test('the public page carries both fields', async () => {
+    const res = await request(app).get(`/public-form/${DID}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.description).toBe('Передумал: слишком терпкий.');
+    expect(res.body.data).toHaveProperty('dryAromaDescription');
+  });
+
+  // Deleting a tasting is four calls from the client, not a cascade here. What
+  // matters is that the dry-leaf row is not a special case in the third of them.
+  test('the aroma cleanup clears the dry-leaf row too', async () => {
+    expect((await request(app).delete(`/my-aromas/${DID}`).set('Cookie', cookieA)).status).toBe(200);
+    const res = await request(app).get(`/my-aromas/${DID}`).set('Cookie', cookieA);
+    expect(res.body.data).toHaveLength(0);
+
+    await request(app).delete(`/my-form/${DID}`).set('Cookie', cookieA);
+  });
+});
+
 describe('access control', () => {
   test('GET /my-form of another user -> empty list', async () => {
     const res = await request(app).get(`/my-form/${SID}`).set('Cookie', cookieB);

@@ -65,6 +65,26 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
 
+    // The taster's own words about the tea as a whole, as opposed to the
+    // per-пролив `description` on a Brewing. Same 2000 characters as that
+    // one — it is the same kind of text, written about the whole session.
+    description: {
+      type: String,
+      required: false,
+      maxlength: 2000,
+    },
+
+    // The dry leaf is smelled before any water touches it, so its aroma belongs
+    // to the tea rather than to a пролив. The descriptors themselves are
+    // ordinary Aroma documents carrying brewingCount 0 — same dictionary, same
+    // pickers, same quick-pick statistics as every other aroma; only this
+    // free-text characterisation lives on the tasting.
+    dryAromaDescription: {
+      type: String,
+      required: false,
+      maxlength: 2000,
+    },
+
     // Moderation. Deliberately NOT the same field as publicAccess: that one is
     // the owner's own switch, so a block expressed through it would be undone by
     // the next tap on «Публикация в блоге». While this is true the tasting is
@@ -131,6 +151,12 @@ const userSchema = new mongoose.Schema(
         duration: { type: Number },
       },
       transcript: { type: String },
+      // The same speech before text normalization rewrote it. Normalization
+      // is what makes the stored transcript readable, but it also converts
+      // spoken numbers — «пять с половиной грамм» came back as «5 15 Грамм»
+      // and was stored as a 15 g dose. So the extraction reads this one and
+      // the reader sees the other. Both come from a single recognition.
+      transcriptRaw: { type: String },
       // A recording captures whatever else was in the room — other people, the
       // kitchen, the kids. So sharing the audio is a separate, explicit decision
       // from publishing the tasting text, and it defaults to off.

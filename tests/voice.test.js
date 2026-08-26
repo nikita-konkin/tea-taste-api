@@ -341,6 +341,39 @@ describe('speechkit transcript parsing', () => {
     expect(extractTranscript(items)).toBe('настой густой');
   });
 
+  // The regression behind a real transcript that lost its middle: SpeechKit
+  // refines each final separately and can skip one, and preferring refinements
+  // as a group threw every unrefined utterance away.
+  test('an utterance that came back unrefined is kept, not dropped', () => {
+    const refinement = (finalIndex, text) => ({
+      result: { finalRefinement: { finalIndex, normalizedText: { alternatives: [{ text }] } } },
+    });
+    const final = (text) => ({ result: { final: { alternatives: [{ text }] } } });
+
+    const items = parseItems(JSON.stringify([
+      final('шу пуэр название неопуэр'),
+      refinement('0', 'Шу пуэр, название неопуэр.'),
+      final('магазин мой чай'),
+      final('пять грамм заварка'),
+      refinement('2', '5 грамм заварка.'),
+    ]));
+
+    expect(extractTranscript(items))
+      .toBe('Шу пуэр, название неопуэр. магазин мой чай 5 грамм заварка.');
+  });
+
+  // proto3 JSON leaves out an int64 that is zero, so the first refinement
+  // usually arrives with no finalIndex at all.
+  test('a refinement with no index refines the first final', () => {
+    const items = parseItems(JSON.stringify([
+      { result: { final: { alternatives: [{ text: 'настой густой' }] } } },
+      { result: { finalRefinement: { normalizedText: { alternatives: [{ text: 'Настой густой.' }] } } } },
+      { result: { final: { alternatives: [{ text: 'вкус ореховый' }] } } },
+    ]));
+
+    expect(extractTranscript(items)).toBe('Настой густой. вкус ореховый');
+  });
+
   test('reads a JSON array body as well as newline-delimited objects', () => {
     const items = parseItems(JSON.stringify([
       { result: { final: { alternatives: [{ text: 'первый' }] } } },
@@ -397,6 +430,75 @@ describe('the merge and recognition job', () => {
     const trackFile = path.basename(form.voice.track.url);
     created.push(trackFile);
     expect(fs.existsSync(path.join(uploadDir, trackFile))).toBe(true);
+  }, 60000);
+
+  // The reason both are stored. Recognition returns the raw final and its
+  // normalized refinement in one response; the normalizer is what turned a real
+  // «пять с половиной грамм» into «5 15 Грамм», so the reader gets the tidy
+  // string and the field extraction gets what was actually said.
+  test('keeps the readable transcript and the unrewritten one apart', async () => {
+    process.env.YC_API_KEY = 'test-key';
+    process.env.YC_FOLDER_ID = 'test-folder';
+    stubSpeechKit(JSON.stringify([
+      { result: { final: { alternatives: [{ text: 'пять с половиной грамм заварка' }] } } },
+      {
+        result: {
+          finalRefinement: {
+            finalIndex: '0',
+            normalizedText: { alternatives: [{ text: '5 15 Грамм заварка.' }] },
+          },
+        },
+      },
+    ]));
+
+    const only = await placeSegment(2);
+    await setVoice({
+      'voice.segments': [{ url: only, brewingNumber: 0, duration: 2 }],
+      'voice.status': 'queued',
+      'voice.transcript': '',
+      'voice.transcriptRaw': '',
+      'voice.track': { url: '', duration: 0 },
+    });
+
+    await voiceJob.run(userIdA, PID);
+
+    const form = await getForm();
+    expect(form.voice.transcript).toBe('5 15 Грамм заварка.');
+    expect(form.voice.transcriptRaw).toBe('пять с половиной грамм заварка');
+
+    created.push(path.basename(form.voice.track.url));
+  }, 60000);
+
+  // The model is pinned on purpose: unset, `deferred-general` and
+  // `deferred-general:rc` were measured returning byte-identical text, so this
+  // is a guard against the default moving, not a quality setting. A silent
+  // disappearance would put that guard back to chance.
+  test('recognition is submitted against the pinned model', async () => {
+    process.env.YC_API_KEY = 'test-key';
+    process.env.YC_FOLDER_ID = 'test-folder';
+    stubSpeechKit('{"result":{"final":{"alternatives":[{"text":"проверка"}]}}}');
+
+    const only = await placeSegment(2);
+    await setVoice({
+      'voice.segments': [{ url: only, brewingNumber: 0, duration: 2 }],
+      'voice.status': 'queued',
+      'voice.track': { url: '', duration: 0 },
+    });
+
+    await voiceJob.run(userIdA, PID);
+
+    const submit = global.fetch.mock.calls
+      .find(([url]) => String(url).includes('/recognizeFileAsync'));
+    expect(submit).toBeDefined();
+    const body = JSON.parse(submit[1].body);
+    expect(body.recognitionModel.model).toBe('deferred-general');
+    // Normalization stays on: it is what makes SpeechKit send the refinement
+    // that the readable transcript is built from.
+    expect(body.recognitionModel.textNormalization.textNormalization)
+      .toBe('TEXT_NORMALIZATION_ENABLED');
+
+    const form = await getForm();
+    created.push(path.basename(form.voice.track.url));
   }, 60000);
 
   test('without SpeechKit keys it still merges, and stays idle', async () => {

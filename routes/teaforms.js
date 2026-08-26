@@ -43,6 +43,11 @@ const teaFormValidation = celebrate({
     brewingtype: Joi.string().min(2).max(60).allow(''),
     publicAccess: Joi.boolean(),
     averageRating: Joi.number().min(1).max(10).precision(2),
+    // Free text about the tea as a whole, and about the smell of the dry leaf.
+    // Same 2000 characters a пролив description gets, and .allow('') so an
+    // edit that empties the box actually clears the stored value.
+    description: Joi.string().max(2000).allow(''),
+    dryAromaDescription: Joi.string().max(2000).allow(''),
     // Optional so existing clients that omit it keep working, and explicitly
     // without .default([]) — celebrate replaces req.body with Joi's output, so
     // a default would wipe the stored photos on every PATCH that omits the key.
@@ -73,6 +78,7 @@ const teaFormValidation = celebrate({
         duration: Joi.number().min(0).max(900),
       }),
       transcript: Joi.string().allow('').max(20000),
+      transcriptRaw: Joi.string().allow('').max(20000),
       // Unlike transcript/status, this one IS the client's to set.
       public: Joi.boolean(),
       status: Joi.string().valid('idle', 'queued', 'processing', 'done', 'error'),

@@ -1,6 +1,24 @@
 const AromaDB = require('../models/aromaDB');
 const TasteDB = require('../models/tasteDB');
 const { complete, isConfigured } = require('./yandexGpt');
+const { teaTypeLabels } = require('./teaTypes');
+const { TEAWARE, BREWING } = require('./options');
+
+// The vocabularies the wizard's own dropdowns are built from. SpeechKit has no
+// phrase hints or custom dictionary — stt.proto offers language_restriction and
+// nothing else — so a general model has never heard «шу пуэр», «гайвань» or
+// «пролив» in this sense and reliably mangles them: one real recording came back
+// with «шпу» for «шу пуэр» and «в гайв в гайване» for «в гайване».
+//
+// Repairing them is therefore this layer's job, and it already half does it
+// unaided — it read «гайвань» out of «в Гайв в Гайване» on that same recording.
+// Given the actual lists it can do the rest, and it snaps a mangled value onto a
+// string the form's dropdowns already know rather than inventing a near-miss.
+//
+// Only the short, closed lists are worth the tokens. Water brands, shops and tea
+// names are open sets — a new shop or a tea nobody has logged before must still
+// come through as whatever was said.
+const known = (labels) => labels.map((label) => `- ${label}`).join('\n');
 
 // The picker joins levels with " → " and accepts an intermediate path, so the
 // model is offered category → subcategory only. The full three-level tree would
@@ -161,6 +179,16 @@ const FORM_PROPS = {
   water: nullable('string', 'Какая вода использовалась'),
   teaware: nullable('string', 'Посуда: гайвань, чайник из глины и т.п.'),
   brewingtype: nullable('string', 'Способ заваривания, например Проливы'),
+  // The tea as a whole, and the dry leaf — both are talked about before the
+  // first pour and had nowhere to go, so everything said about them used to be
+  // folded into пролив №1 or lost.
+  description: nullable('string', 'Общее впечатление о чае в целом, словами говорящего'),
+  dryAroma: {
+    type: ['array', 'null'],
+    items: { type: 'string' },
+    description: 'Пути из справочника ароматов для запаха СУХОГО листа, до заваривания',
+  },
+  dryAromaDescription: nullable('string', 'Аромат сухого листа словами говорящего'),
   brewings: {
     type: 'array',
     description: 'По одному объекту на каждый пролив, в порядке номеров',
@@ -226,14 +254,36 @@ const systemPrompt = (aromaTree, tasteTree) => `Ты помогаешь запо
 10. Вид чая (type) почти всегда назван вслух — «тип чая красный», «зелёный», «шэн пуэр» — но распознавание часто рвёт эту фразу на куски. Всё равно найди его и заполни.
 11. topic заполняй ТОЛЬКО когда isTeaTasting: false. Если запись о чае — оставь topic пустым.
 12. Если про пролив сказано «аналогичен предыдущему» — повтори для него ароматы и вкусы предыдущего пролива, а в description отметь, чем он отличается.
-13. Если запись вообще не о дегустации чая (разговор, список дел, что угодно другое) — верни isTeaTasting: false, в topic коротко напиши, о чём запись, а все остальные поля оставь пустыми и brewings пустым массивом. Лучше честно ничего не заполнить, чем выдумать.
+13. Аромат СУХОГО листа (его нюхают до заваривания, часто прямо из пакета или прогретой гайвани) — это dryAroma и dryAromaDescription, а НЕ аромат первого пролива. Не путай их.
+14. description — общее впечатление о чае целиком: стоит ли он своих денег, на что похож, кому подойдёт. Впечатления от конкретных проливов туда не переноси.
+15. Если запись вообще не о дегустации чая (разговор, список дел, что угодно другое) — верни isTeaTasting: false, в topic коротко напиши, о чём запись, а все остальные поля оставь пустыми и brewings пустым массивом. Лучше честно ничего не заполнить, чем выдумать.
+
+Числа в расшифровке обычно записаны СЛОВАМИ, знаков препинания и заглавных букв может не быть — так и задумано:
+- «пять с половиной грамм» — это 5.5, а не 5 и не 15. Дроби («с половиной», «с четвертью») сохраняй.
+- «девяносто градусов» рядом со словом «температура» — это температура воды в °C. Голое число возле «температура» — всегда градусы Цельсия, никогда не проценты.
+- В старых записях числа мог переписать нормализатор, и он ошибался: «пять с половиной грамм» превращалось в «5 15 Грамм», «девяносто градусов» — в «90% 2 р.». Увидел такую нелепицу — доверяй словам вокруг, а не цифрам, и ставь null, если понять невозможно.
 
 Числа легко перепутать, поэтому отдельно:
 - weight — сколько грамм СУХОГО ЛИСТА положили в чайник для этой дегустации (обычно 4–10 г). Это НЕ вес купленной упаковки.
 - volume — сколько миллилитров ВОДЫ наливают на один пролив (обычно 50–200 мл). Это НЕ объём чайника и НЕ навеска.
 - price — цена ВСЕЙ покупки в рублях. Если названа цена за грамм и вес упаковки — перемножь и верни итог, а не цену за грамм.
+- temperature — температура ВОДЫ в градусах Цельсия (обычно 60–100).
 - country — СТРАНА (например, "Китай"). Вэньшань, Юньнань, Иу — это регионы, а не страны; страну выведи из региона.
-- nameRU — как чай назвали бы на этикетке: вид, происхождение, год, форма прессовки, если они прозвучали.
+- nameRU — как чай назвали бы на этикетке: вид, происхождение, год, форма прессовки, если они прозвучали. Если говорящий прямо сказал «название …», «называется …» — то, что идёт СЛЕДОМ, обязано попасть в nameRU, даже если распознано криво и не похоже ни на один известный чай. Кривое название пользователь исправит одним касанием; пропавшего он не заметит. Название — не то же самое, что вид чая: «шпу название неокур» — это type «пуэр» И nameRU «неокур», а не только type.
+
+ВИДЫ ЧАЯ — если прозвучал вид чая, верни в type ТОЧНО одну из этих строк, целиком, вместе со скобками:
+${known(teaTypeLabels)}
+Распознавание часто рвёт вид чая на куски: «шпу», «шу пу», «шэн пу эр» — это пуэр; «улунчик», «улон» — улун. Восстанавливай.
+
+ПОСУДА — если прозвучала посуда, верни в teaware ТОЧНО одну из этих строк:
+${known(Object.keys(TEAWARE))}
+«гайв», «гайвана», «гайване» — это Гайвань.
+
+СПОСОБЫ ЗАВАРИВАНИЯ — если прозвучал способ, верни в brewingtype ТОЧНО одну из этих строк:
+${known(Object.keys(BREWING))}
+«проливы», «по-китайски», «гунфу» — это «Проливы (по-китайски)»; «настаивание», «по-европейски» — «Настаивание (по-европейски)».
+
+Если прозвучавшее значение НЕ похоже ни на одну строку из списка — верни его словами говорящего, не подгоняй силой.
 
 СПРАВОЧНИК АРОМАТОВ (категория: подкатегории):
 ${aromaTree}
@@ -279,6 +329,13 @@ const extractFromTranscript = async (transcript) => {
   }
 
   const droppedPaths = [];
+
+  // Same treatment as a пролив's aromas: resolved against the dictionary, and
+  // whatever it cannot place is spelled out in the free-text field rather than
+  // dropped on the floor.
+  const dry = keepKnown(data.dryAroma, knownAromas);
+  droppedPaths.push(...dry.dropped);
+
   const brewings = (data.brewings || []).map((brewing) => {
     const a = keepKnown(brewing.aromas, knownAromas);
     const t = keepKnown(brewing.tastes, knownTastes);
@@ -291,9 +348,21 @@ const extractFromTranscript = async (transcript) => {
     });
   });
 
+  // Both dry-leaf keys are replaced wholesale by the resolved versions below,
+  // so the model's raw ones must not survive the spread — an unresolved path
+  // that keepKnown rejected would otherwise come back through the first half.
+  const { dryAroma, dryAromaDescription, ...rest } = stripEmpty(data);
+
   return {
     ok: true,
-    data: { ...stripEmpty(data), brewings },
+    data: {
+      ...rest,
+      ...stripEmpty({
+        dryAroma: dry.kept,
+        dryAromaDescription: withUnmatched(data.dryAromaDescription, dry.dropped),
+      }),
+      brewings,
+    },
     droppedPaths,
     usage: answer.usage,
     modelVersion: answer.modelVersion,

@@ -45,10 +45,20 @@ const submit = async (mp3Path) => {
   const json = await post(`${STT_URL}/recognizeFileAsync`, {
     content,
     recognitionModel: {
+      // Pinned rather than left to the default. Measured on the same recording:
+      // unset, `deferred-general` and `deferred-general:rc` returned byte-identical
+      // results, so this is not a quality lever — it is a guard against the
+      // default moving under us later. The stable one, not the release candidate:
+      // :rc bought nothing here and is free to change without notice.
+      model: 'deferred-general',
       audioFormat: { containerAudio: { containerAudioType: 'MP3' } },
       languageRestriction: { restrictionType: 'WHITELIST', languageCode: ['ru-RU'] },
-      // literatureText rewrites spoken filler into readable prose, which both
-      // the stored transcript and the field extraction benefit from.
+      // Kept ON deliberately, and it is what produces the readable transcript
+      // the user is shown. Do NOT turn it off to "fix" the numbers: it is also
+      // what makes SpeechKit send the refinement alongside the raw final, and
+      // extractRawTranscript below already keeps the unrewritten text for the
+      // field extraction. Disabling it would lose the readable half and gain
+      // nothing — see utils/extractForm.js for which half reads which.
       textNormalization: {
         textNormalization: 'TEXT_NORMALIZATION_ENABLED',
         literatureText: true,
@@ -89,29 +99,85 @@ const parseItems = (text) => {
 
 // With normalization on, the same utterance is reported twice: once as `final`
 // and again as `finalRefinement` carrying the normalized text. Concatenating
-// everything would duplicate every sentence, so refinements win outright when
-// any are present.
+// both would duplicate every sentence.
+//
+// Refinement is per utterance and optional — stt.proto says a FinalRefinement
+// names the `final_index` it refines, and only sends one "for each final, if
+// normalization is enabled". A short or low-confidence utterance can come back
+// with no refinement at all while its neighbours have one.
+//
+// So the two are paired by that index. Letting refinements win *as a group* —
+// what this did before — silently dropped every utterance that had none, and
+// the survivors still read as fluent prose, so a transcript could lose its
+// middle without looking damaged.
 const extractTranscript = (items) => {
-  const refined = [];
-  const plain = [];
+  const finals = [];
+  const refined = new Map();
 
   items.forEach((item) => {
     const result = (item && item.result) || item || {};
-    const refinement = result.finalRefinement
-      && result.finalRefinement.normalizedText
-      && result.finalRefinement.normalizedText.alternatives;
-    const final = result.final && result.final.alternatives;
+    const refinement = result.finalRefinement;
+    const normalized = refinement
+      && refinement.normalizedText
+      && refinement.normalizedText.alternatives;
 
-    if (refinement && refinement[0] && refinement[0].text) refined.push(refinement[0].text.trim());
-    else if (final && final[0] && final[0].text) plain.push(final[0].text.trim());
+    if (normalized && normalized[0] && normalized[0].text) {
+      // proto3 JSON omits an int64 that is zero, so a missing index is the
+      // first final rather than a malformed message.
+      refined.set(Number(refinement.finalIndex || 0), normalized[0].text.trim());
+      return;
+    }
+
+    const final = result.final && result.final.alternatives;
+    if (final && final[0] && final[0].text) finals.push(final[0].text.trim());
   });
 
-  return (refined.length ? refined : plain).filter(Boolean).join(' ').trim();
+  // Refinements with nothing to pair against still have to yield their text:
+  // that is the whole response when every utterance normalized cleanly.
+  if (!finals.length) {
+    return [...refined.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, text]) => text)
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+  }
+
+  return finals
+    .map((text, index) => (refined.has(index) ? refined.get(index) : text))
+    .filter(Boolean)
+    .join(' ')
+    .trim();
 };
 
+// What the recogniser actually heard, before normalization rewrote it.
+//
+// Measured on a real recording: SpeechKit heard «пять с половиной грамм
+// заварка» and the normalizer turned it into «5 15 Грамм заварка», from which
+// the extraction stored a 15 g dose for a 5.5 g brew. Numbers spoken with units
+// are exactly what a tasting is made of, so the text the field extraction reads
+// must be the unrewritten one.
+//
+// Both arrive in the same response — the raw `final` and its `finalRefinement`
+// — so keeping the pair costs nothing beyond a second string.
+const extractRawTranscript = (items) => items
+  .map((item) => {
+    const result = (item && item.result) || item || {};
+    const final = result.final && result.final.alternatives;
+    return final && final[0] && final[0].text ? final[0].text.trim() : '';
+  })
+  .filter(Boolean)
+  .join(' ')
+  .trim();
+
+// `text` is the readable transcript the user is shown; `raw` is what the field
+// extraction reads. They are the same string when normalization returned
+// nothing to refine.
 const fetchTranscript = async (operationId) => {
-  const text = await get(`${STT_URL}/getRecognition?operationId=${encodeURIComponent(operationId)}`);
-  return extractTranscript(parseItems(text));
+  const body = await get(`${STT_URL}/getRecognition?operationId=${encodeURIComponent(operationId)}`);
+  const items = parseItems(body);
+  const text = extractTranscript(items);
+  return { text, raw: extractRawTranscript(items) || text };
 };
 
 // Best effort: leaving a finished recognition around is untidy but harmless.
@@ -121,5 +187,12 @@ const cleanup = (operationId) => fetch(
 ).catch(() => {});
 
 module.exports = {
-  isConfigured, submit, isDone, fetchTranscript, cleanup, extractTranscript, parseItems,
+  isConfigured,
+  submit,
+  isDone,
+  fetchTranscript,
+  cleanup,
+  extractTranscript,
+  extractRawTranscript,
+  parseItems,
 };

@@ -312,6 +312,15 @@ const renderForm = async (req, res, next) => {
     const metaRow = (label, value) => (filled(value)
       ? `      <dt>${esc(label)}</dt><dd>${esc(value)}</dd>` : '');
 
+    // The dry leaf is smelled before the first pour, so its descriptors are
+    // Aroma documents on brewing 0 — a number no Brewing ever has, which is why
+    // the per-пролив loop below never picks them up.
+    const dryAromaPaths = aromas
+      .filter((a) => Number(a.brewingCount) === 0)
+      .sort((a, b) => a.aromaCount - b.aromaCount)
+      .map((a) => descriptorPath(a, 'aromaStage'))
+      .filter(Boolean);
+
     const brewSections = brewings.map((brew) => {
       const aromaPaths = aromas
         .filter((a) => a.brewingCount === brew.brewingCount)
@@ -366,6 +375,15 @@ ${[
     metaRow(T('tasting.brewingMethod'), translateOption(form.brewingtype, locale)),
   ].filter(Boolean).join('\n')}
       </dl>
+${filled(form.description) ? `      <section>
+        <h2>${esc(T('tasting.generalDescription'))}</h2>
+        <p>${esc(form.description)}</p>
+      </section>` : ''}
+${dryAromaPaths.length || filled(form.dryAromaDescription) ? `      <section>
+        <h2>${esc(T('tasting.dryAroma'))}</h2>
+        ${dryAromaPaths.length ? `<p>${dryAromaPaths.map((p) => esc(translateDescriptorPath(p, locale))).join('; ')}</p>` : ''}
+        ${filled(form.dryAromaDescription) ? `<p>${esc(form.dryAromaDescription)}</p>` : ''}
+      </section>` : ''}
 ${brewSections}
       ${typeHub ? `<p><a href="${esc(localizePath(`/blog/type/${typeHub.slug}`, locale))}">${esc(T('tasting.allOfType', { type: teaTypeShort(typeHub, locale) }))}</a></p>` : ''}
       <p><a href="${esc(localizePath('/blog', locale))}">${esc(T('tasting.backToFeed'))}</a></p>

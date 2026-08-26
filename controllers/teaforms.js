@@ -45,10 +45,12 @@ module.exports.createTeaForm = (req, res, next) => {
     brewingtype,
     publicAccess,
     averageRating,
+    description,
+    dryAromaDescription,
     photos,
     voice
   } = req.body;
-  // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
+  // const { aromas, tastes, brewingRating, brewingTime } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -100,6 +102,8 @@ module.exports.createTeaForm = (req, res, next) => {
         teaware: teaware,
         brewingtype: brewingtype,
         publicAccess: publishable,
+        description: description,
+        dryAromaDescription: dryAromaDescription,
         sessionId: sessionId,
         // Omitted rather than written empty when there is none: the unique index
         // ignores a missing slug but treats '' as a value two documents would be
@@ -383,10 +387,12 @@ module.exports.patchTeaForm = (req, res, next) => {
     brewingtype,
     publicAccess,
     averageRating,
+    description,
+    dryAromaDescription,
     photos,
     voice
   } = req.body;
-  // const { aromas, tastes, description, brewingRating, brewingTime } = req.body;
+  // const { aromas, tastes, brewingRating, brewingTime } = req.body;
 
   const owner = req.user._id;
   const sessionId = req.params.sessionId;
@@ -405,6 +411,8 @@ module.exports.patchTeaForm = (req, res, next) => {
     brewingtype: brewingtype,
     publicAccess: publicAccess,
     averageRating: averageRating,
+    description: description,
+    dryAromaDescription: dryAromaDescription,
     // Mongoose drops undefined keys from the cast update, so omitting photos
     // preserves them, while an explicit [] clears them.
     photos: photos
@@ -437,6 +445,7 @@ module.exports.patchTeaForm = (req, res, next) => {
     update["voice.error"] = "";
     if (!segments.length) {
       update["voice.transcript"] = "";
+      update["voice.transcriptRaw"] = "";
       update["voice.operationId"] = "";
       update["voice.track"] = { url: "", duration: 0 };
       update["voice.extraction"] = null;
@@ -602,7 +611,11 @@ module.exports.extractFromVoice = (req, res, next) => {
         return null;
       }
 
-      const transcript = (voice.transcript || "").trim();
+      // The unrewritten text when there is one: normalization turns spoken
+      // numbers into digits and gets them wrong, and a tasting is mostly
+      // numbers with units. Falls back to the readable transcript for
+      // recordings recognised before both were kept.
+      const transcript = (voice.transcriptRaw || voice.transcript || "").trim();
       if (!transcript) {
         const e = new Error("Расшифровка ещё не готова.");
         e.statusCode = 409;

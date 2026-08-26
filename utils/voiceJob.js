@@ -79,9 +79,13 @@ const transcribe = async (owner, sessionId, trackPath, seconds) => {
 
   await setVoice(owner, sessionId, { operationId: submitted.operationId, status: 'processing' });
 
-  const transcript = await pollTranscript(submitted.operationId);
+  const { text, raw } = await pollTranscript(submitted.operationId);
   await setVoice(owner, sessionId, {
-    transcript,
+    transcript: text,
+    // Kept beside the readable one because normalization rewrites numbers, and
+    // the field extraction has to read what was said rather than what the
+    // normalizer made of it.
+    transcriptRaw: raw,
     status: 'done',
     operationId: '',
     error: '',
@@ -103,9 +107,9 @@ const run = async (owner, sessionId, resumeOperationId) => {
 
   try {
     if (resumeOperationId) {
-      const transcript = await pollTranscript(resumeOperationId);
+      const { text, raw } = await pollTranscript(resumeOperationId);
       await setVoice(owner, sessionId, {
-        transcript, status: 'done', operationId: '', error: '',
+        transcript: text, transcriptRaw: raw, status: 'done', operationId: '', error: '',
       });
       await speechkit.cleanup(resumeOperationId);
       return;
