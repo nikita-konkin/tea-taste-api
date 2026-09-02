@@ -19,9 +19,21 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 18, cache: npm }
       # The voice-note tests transcode and concatenate real audio. The hosted
-      # runner ships ffmpeg, but installing it explicitly keeps the job honest
-      # if that ever changes.
-      - run: ffmpeg -version > /dev/null 2>&1 || sudo apt-get install -y ffmpeg
+      # runner used to ship ffmpeg and no longer does, so this fallback is the
+      # path that actually runs.
+      #
+      # `apt-get update` first, always: the runner image's package lists go stale,
+      # and apt then asks the mirror for a .deb version that has already been
+      # superseded — which answers 404 and fails the whole job. libssh-gcrypt-4
+      # did exactly that. --no-install-recommends because ffmpeg's recommends drag
+      # in pocketsphinx and the VA-API/VDPAU drivers, ~30 MB the tests never touch
+      # and thirty more packages that can 404.
+      - name: Install ffmpeg
+        run: |
+          ffmpeg -version > /dev/null 2>&1 || {
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          }
       - run: npm ci
       - run: npm test
         env:
