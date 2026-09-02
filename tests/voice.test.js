@@ -422,9 +422,13 @@ describe('the merge and recognition job', () => {
 
     const form = await getForm();
     expect(form.voice.status).toBe('done');
-    expect(form.voice.transcript).toBe('Готово.');
+    // Two проливы, so two recognitions and two parts — the пролив a note
+    // belongs to is the user's own answer and is no longer inferred.
+    expect(form.voice.parts.map((p) => p.brewingNumber)).toEqual([1, 2]);
+    // The flat transcript is the readable join, headed by пролив.
+    expect(form.voice.transcript).toBe('Пролив 1. Готово.\nПролив 2. Готово.');
+    // The playable track is still every segment end to end, in пролив order.
     expect(form.voice.track.url).toMatch(/^\/api\/uploads\/.+\.mp3$/);
-    // Both segments are in there, so roughly the sum rather than one of them.
     expect(form.voice.track.duration).toBeGreaterThan(3.5);
 
     const trackFile = path.basename(form.voice.track.url);
@@ -558,6 +562,101 @@ describe('the merge and recognition job', () => {
 // The one change here where a regression leaks something rather than just
 // looking wrong: a recording catches whoever else was in the room, so it must be
 // absent from the public payload — not merely hidden by the frontend.
+// The bug this split exists for: notes recorded against проливы 1..6 were merged
+// into one track, recognised as one job, and the model was left to find the
+// boundaries in the words. It found three, so проливы 4-6 got no suggestion at
+// all and everything unattributable landed in the overall description.
+describe('each пролив is recognised on its own', () => {
+  test('two проливы, two recognitions, text attributed to the right one', async () => {
+    process.env.YC_API_KEY = 'test-key';
+    process.env.YC_FOLDER_ID = 'test-folder';
+
+    // A different transcript per submission, so this asserts attribution rather
+    // than merely that something came back.
+    const said = ['первый лёгкий', 'второй терпкий', 'лишний'];
+    const bodies = new Map();
+    let submitted = 0;
+
+    global.fetch = jest.fn(async (url) => {
+      const target = String(url);
+      if (target.includes('/recognizeFileAsync')) {
+        const id = `op-part-${submitted}`;
+        bodies.set(id, JSON.stringify({
+          result: { final: { alternatives: [{ text: said[submitted] }] } },
+        }));
+        submitted += 1;
+        return jsonRes({ id });
+      }
+      if (target.includes('/operations/')) return jsonRes({ done: true });
+      if (target.includes('/getRecognition')) {
+        const id = decodeURIComponent(target.split('operationId=')[1] || '');
+        return textRes(bodies.get(id) || '');
+      }
+      if (target.includes('/deleteRecognition')) return textRes('');
+      throw new Error(`unexpected fetch: ${target}`);
+    });
+
+    const late = await placeSegment(2);
+    const earlyA = await placeSegment(2);
+    const earlyB = await placeSegment(2);
+
+    await setVoice({
+      // Deliberately out of order, and пролив 1 carries two notes: grouping is
+      // by the user's number, not by upload order or one job per file.
+      'voice.segments': [
+        { url: late, brewingNumber: 3, duration: 2 },
+        { url: earlyA, brewingNumber: 1, duration: 2 },
+        { url: earlyB, brewingNumber: 1, duration: 2 },
+      ],
+      'voice.status': 'queued',
+      'voice.transcript': '',
+      'voice.parts': [],
+      'voice.track': { url: '', duration: 0 },
+    });
+
+    await voiceJob.run(userIdA, PID);
+
+    const form = await getForm();
+    expect(submitted).toBe(2);
+    expect(form.voice.parts.map((part) => part.brewingNumber)).toEqual([1, 3]);
+    expect(form.voice.parts[0].transcript).toBe('первый лёгкий');
+    expect(form.voice.parts[1].transcript).toBe('второй терпкий');
+    // Пролив 3 keeps its number: the gap where пролив 2 was never recorded is
+    // real, and closing it would move a note onto the wrong пролив.
+    expect(form.voice.parts[1].brewingNumber).toBe(3);
+    // Nothing left outstanding once everything is collected.
+    expect(form.voice.pending).toEqual([]);
+
+    created.push(path.basename(form.voice.track.url));
+  }, 60000);
+});
+
+describe('the transcript handed to the extractor', () => {
+  const { userText } = require('../utils/extractForm');
+
+  test('every note is labelled with the пролив the user recorded it in', () => {
+    const text = userText([
+      { brewingNumber: 0, transcript: 'взял на пробу' },
+      { brewingNumber: 1, transcript: 'лёгкий' },
+      { brewingNumber: 4, transcript: 'терпкий' },
+    ]);
+
+    expect(text).toContain('[О чае] взял на пробу');
+    expect(text).toContain('[Пролив 1] лёгкий');
+    expect(text).toContain('[Пролив 4] терпкий');
+    // Проливы 2 and 3 were never recorded against. The gap is data, not an
+    // error to tidy away by renumbering.
+    expect(text).not.toContain('[Пролив 2]');
+    expect(text).not.toContain('[Пролив 3]');
+  });
+
+  test('one undivided recording is passed through unlabelled', () => {
+    const text = userText('просто текст');
+    expect(text).toContain('просто текст');
+    expect(text).not.toContain('[Пролив');
+  });
+});
+
 describe('the recording is withheld from public views until shared', () => {
     beforeAll(async () => {
         await request(app).patch(`/create-form/${PID}`).set('Cookie', cookieA)

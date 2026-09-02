@@ -446,6 +446,8 @@ module.exports.patchTeaForm = (req, res, next) => {
     if (!segments.length) {
       update["voice.transcript"] = "";
       update["voice.transcriptRaw"] = "";
+      update["voice.parts"] = [];
+      update["voice.pending"] = [];
       update["voice.operationId"] = "";
       update["voice.track"] = { url: "", duration: 0 };
       update["voice.extraction"] = null;
@@ -611,18 +613,32 @@ module.exports.extractFromVoice = (req, res, next) => {
         return null;
       }
 
-      // The unrewritten text when there is one: normalization turns spoken
+      // Per пролив when recognition produced parts: the boundaries are the
+      // user's own, and handing them over is the difference between the model
+      // knowing which пролив a note belongs to and guessing at it.
+      //
+      // Within each part, the unrewritten text: normalization turns spoken
       // numbers into digits and gets them wrong, and a tasting is mostly
-      // numbers with units. Falls back to the readable transcript for
-      // recordings recognised before both were kept.
-      const transcript = (voice.transcriptRaw || voice.transcript || "").trim();
-      if (!transcript) {
+      // numbers with units. Both fall back for recordings made before either
+      // existed.
+      const parts = (voice.parts || [])
+        .map((part) => ({
+          brewingNumber: Number(part.brewingNumber) || 0,
+          transcript: String(part.transcriptRaw || part.transcript || "").trim(),
+        }))
+        .filter((part) => part.transcript);
+
+      const source = parts.length
+        ? parts
+        : (voice.transcriptRaw || voice.transcript || "").trim();
+
+      if (!source.length) {
         const e = new Error("Расшифровка ещё не готова.");
         e.statusCode = 409;
         throw e;
       }
 
-      return extractFromTranscript(transcript).then((result) => {
+      return extractFromTranscript(source).then((result) => {
         if (!result.ok) {
           const e = new Error(result.reason);
           e.statusCode = 502;

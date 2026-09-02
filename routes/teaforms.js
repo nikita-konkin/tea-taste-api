@@ -79,6 +79,22 @@ const teaFormValidation = celebrate({
       }),
       transcript: Joi.string().allow('').max(20000),
       transcriptRaw: Joi.string().allow('').max(20000),
+      // Server-owned like transcript, and accepted for the same reason: the
+      // edit dialog may echo the whole voice object back. patchTeaForm keeps
+      // only `segments` and `public` from a client either way.
+      parts: Joi.array().max(60).items(
+        Joi.object().keys({
+          brewingNumber: Joi.number().integer().min(0).max(50),
+          transcript: Joi.string().allow('').max(20000),
+          transcriptRaw: Joi.string().allow('').max(20000),
+        }),
+      ),
+      pending: Joi.array().max(60).items(
+        Joi.object().keys({
+          brewingNumber: Joi.number().integer().min(0).max(50),
+          operationId: Joi.string().allow('').max(200),
+        }),
+      ),
       // Unlike transcript/status, this one IS the client's to set.
       public: Joi.boolean(),
       status: Joi.string().valid('idle', 'queued', 'processing', 'done', 'error'),

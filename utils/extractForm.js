@@ -244,7 +244,7 @@ const systemPrompt = (aromaTree, tasteTree) => `Ты помогаешь запо
 Правила:
 1. Заполняй только то, что действительно прозвучало. Если данных нет — ставь null, не придумывай.
 2. Исправляй очевидные ошибки распознавания в названиях чая ("Шэньпээр" → "Шэн пуэр").
-3. Проливы нумеруй по порядку так, как их называет говорящий.
+3. Если строка расшифровки начинается с пометки «[Пролив N]» — это номер, который поставил САМ ПОЛЬЗОВАТЕЛЬ, записывая заметку прямо в этом проливе. Он ТОЧНЫЙ. Бери number строго из пометки, не перенумеровывай, не сдвигай и НИКОГДА не сливай два помеченных пролива в один: сколько разных номеров в пометках — столько объектов в brewings. Говорящий обычно не произносит номер вслух, и это нормально. Если пометок нет вовсе — тогда нумеруй по порядку так, как называет говорящий.
 4. В description каждого пролива — короткое описание впечатления словами говорящего.
 5. Ароматы и вкусы указывай ТОЛЬКО путями из справочников ниже, через " → ". Разрешён неполный путь ("Древесный" или "Древесный → Кора").
 6. Если для прозвучавшего оттенка подходящего пути в справочнике НЕТ — не выдумывай путь, а обязательно опиши этот оттенок словами в description этого пролива. Ни один названный оттенок не должен потеряться.
@@ -255,7 +255,7 @@ const systemPrompt = (aromaTree, tasteTree) => `Ты помогаешь запо
 11. topic заполняй ТОЛЬКО когда isTeaTasting: false. Если запись о чае — оставь topic пустым.
 12. Если про пролив сказано «аналогичен предыдущему» — повтори для него ароматы и вкусы предыдущего пролива, а в description отметь, чем он отличается.
 13. Аромат СУХОГО листа (его нюхают до заваривания, часто прямо из пакета или прогретой гайвани) — это dryAroma и dryAromaDescription, а НЕ аромат первого пролива. Не путай их.
-14. description — общее впечатление о чае целиком: стоит ли он своих денег, на что похож, кому подойдёт. Впечатления от конкретных проливов туда не переноси.
+14. description — общее впечатление о чае ЦЕЛИКОМ: стоит ли он своих денег, на что похож, кому подойдёт. Заполняй его только из заметки с пометкой «[О чае]» или из прямого итога («в целом чай…», «в итоге…»). Впечатления от конкретных проливов туда не переноси и НЕ ПЕРЕСКАЗЫВАЙ их своими словами: каждое такое впечатление принадлежит своему проливу. Если общей заметки нет и итога не прозвучало — оставь description пустым.
 15. Если запись вообще не о дегустации чая (разговор, список дел, что угодно другое) — верни isTeaTasting: false, в topic коротко напиши, о чём запись, а все остальные поля оставь пустыми и brewings пустым массивом. Лучше честно ничего не заполнить, чем выдумать.
 
 Числа в расшифровке обычно записаны СЛОВАМИ, знаков препинания и заглавных букв может не быть — так и задумано:
@@ -291,9 +291,35 @@ ${aromaTree}
 СПРАВОЧНИК ВКУСОВ (категория: подкатегории):
 ${tasteTree}`;
 
-const extractFromTranscript = async (transcript) => {
+// The transcript as the model should see it.
+//
+// A plain string is one undivided recording and passes through as it always
+// did. An array is one entry per пролив, and every line is labelled with the
+// number the USER gave it by recording inside that пролив — which the model
+// could never recover from the words alone, because a taster does not announce
+// "пролив four" before describing it.
+const userText = (source) => {
+  if (!Array.isArray(source)) return `Расшифровка записи дегустации:\n\n${source}`;
+
+  const lines = source.map(({ brewingNumber, transcript }) => (
+    Number(brewingNumber) > 0
+      ? `[Пролив ${Number(brewingNumber)}] ${transcript}`
+      : `[О чае] ${transcript}`
+  ));
+
+  return 'Расшифровка записи дегустации. Каждая строка — отдельная заметка, записанная в момент своего пролива; '
+    + `номер в квадратных скобках проставил сам пользователь и он ТОЧЕН:\n\n${lines.join('\n')}`;
+};
+
+const isEmptySource = (source) => (Array.isArray(source)
+  ? !source.some((part) => part && String(part.transcript || '').trim())
+  : !source || !String(source).trim());
+
+// `source` is either the whole transcript as one string, or [{brewingNumber,
+// transcript}] — one entry per пролив, which is what recognition now produces.
+const extractFromTranscript = async (source) => {
   if (!isConfigured()) return { ok: false, reason: 'YandexGPT не настроен.' };
-  if (!transcript || !transcript.trim()) return { ok: false, reason: 'Пустая расшифровка.' };
+  if (isEmptySource(source)) return { ok: false, reason: 'Пустая расшифровка.' };
 
   const [aromas, tastes] = await Promise.all([loadTree(AromaDB), loadTree(TasteDB)]);
   const knownAromas = validPaths(aromas);
@@ -301,7 +327,7 @@ const extractFromTranscript = async (transcript) => {
 
   const answer = await complete({
     system: systemPrompt(renderTree(aromas), renderTree(tastes)),
-    user: `Расшифровка записи дегустации:\n\n${transcript}`,
+    user: userText(source),
     schema: FORM_SCHEMA,
     maxTokens: 8000,
   });
@@ -369,4 +395,6 @@ const extractFromTranscript = async (transcript) => {
   };
 };
 
-module.exports = { extractFromTranscript, FORM_SCHEMA, keepKnown, validPaths, loadTree };
+module.exports = {
+  extractFromTranscript, FORM_SCHEMA, keepKnown, validPaths, loadTree, userText,
+};

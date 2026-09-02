@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const crypto = require('crypto');
 
 const TeaForm = require('../models/teaform');
@@ -46,6 +47,39 @@ const readable = async (file) => fs.promises.access(file, fs.constants.R_OK)
 const orderedSegments = (voice) => [...((voice && voice.segments) || [])]
   .sort((a, b) => (a.brewingNumber || 0) - (b.brewingNumber || 0));
 
+// The recordings of one пролив, together, in пролив order.
+//
+// `brewingNumber` is the user's own answer to "which пролив is this?" — they
+// tapped record inside that пролив's block — and it used to be read for sort
+// order and then dropped. Everything was merged into one track, recognised as
+// one job, and the model was asked to find the boundaries again in the words.
+// It cannot: a taster describing пролив 4 does not announce "пролив four", so
+// several проливы collapsed into one and the rest got no suggestion at all.
+const groupSegments = (segments) => {
+  const byNumber = new Map();
+  segments.forEach((segment) => {
+    const n = Number(segment.brewingNumber) || 0;
+    if (!byNumber.has(n)) byNumber.set(n, []);
+    byNumber.get(n).push(segment);
+  });
+  return [...byNumber.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([n, segs]) => ({ n, segs }));
+};
+
+const partLabel = (n) => (n ? `Пролив ${n}` : 'О чае');
+
+// The flat transcript the reader is shown, rebuilt from the parts. Headed by
+// пролив so the page shows the same structure the extraction now works from —
+// but a lone note is the whole transcript and needs no heading.
+const joinParts = (parts, key) => {
+  const rows = parts
+    .map((part) => ({ n: part.brewingNumber, text: String(part[key] || '').trim() }))
+    .filter((row) => row.text);
+  if (rows.length <= 1) return rows.length ? rows[0].text : '';
+  return rows.map((row) => `${partLabel(row.n)}. ${row.text}`).join('\n');
+};
+
 const pollTranscript = async (operationId) => {
   const deadline = Date.now() + POLL_DEADLINE_MS;
   let wait = POLL_START_MS;
@@ -61,31 +95,82 @@ const pollTranscript = async (operationId) => {
   throw new Error('Расшифровка не завершилась за отведённое время.');
 };
 
-const transcribe = async (owner, sessionId, trackPath, seconds) => {
+// One пролив's recordings, submitted as a single recognition job.
+//
+// Deliberately NOT the merged track: that one is for playback, and recognising
+// it as a whole is what lost the пролив boundaries. Recognition is billed per
+// 15 s per call, so a пролив of two short notes rounds up where the merged
+// track would not — a few kopeks against suggestions that land on the right
+// пролив.
+const submitGroup = async (files) => {
+  // A group of one needs no concat, which also spares it a second lossy
+  // generation before the squeeze.
+  const joinedPath = files.length === 1
+    ? null
+    : path.join(os.tmpdir(), `tea-part-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.mp3`);
+  if (joinedPath) await concatMp3(files, joinedPath);
+
+  // Silence is billed exactly like speech, so it goes before the upload — from
+  // this throwaway copy only, never from anything the user plays back.
+  const squeezed = await squeezeForRecognition(joinedPath || files[0]);
+  try {
+    return await speechkit.submit(squeezed.path);
+  } finally {
+    // Guarded: when nothing was squeezed the path IS the input, and for a
+    // single-file group that input is the user's own recording.
+    if (squeezed.squeezed) await fs.promises.unlink(squeezed.path).catch(() => {});
+    if (joinedPath) await fs.promises.unlink(joinedPath).catch(() => {});
+  }
+};
+
+// Every group submitted, then every group polled — in that order, and with the
+// operation ids written down in between. A restart between the two halves would
+// otherwise pay SpeechKit a second time for recognition already bought.
+const transcribe = async (owner, sessionId, groups, seconds) => {
   // Booked before the upload: refusing afterwards would still be billed.
   const quota = await reserve(owner, seconds);
   if (!quota.ok) return fail(owner, sessionId, quota.reason);
 
-  // Recognition is billed per 15 s, so the silence goes before the upload — but
-  // only from this throwaway copy, never from the track the user plays back.
-  const squeezed = await squeezeForRecognition(trackPath);
-  if (squeezed.squeezed) {
-    console.log(`voice: ${Math.round(squeezed.before)}s -> ${Math.round(squeezed.after)}s for recognition`);
+  const pending = [];
+  /* eslint-disable no-await-in-loop */
+  for (const group of groups) {
+    const submitted = await submitGroup(group.files);
+    if (!submitted.ok) return fail(owner, sessionId, submitted.reason);
+    pending.push({ brewingNumber: group.n, operationId: submitted.operationId });
   }
+  /* eslint-enable no-await-in-loop */
 
-  const submitted = await speechkit.submit(squeezed.path);
-  if (squeezed.squeezed) await fs.promises.unlink(squeezed.path).catch(() => {});
-  if (!submitted.ok) return fail(owner, sessionId, submitted.reason);
+  await setVoice(owner, sessionId, { pending, status: 'processing' });
+  return collect(owner, sessionId, pending);
+};
 
-  await setVoice(owner, sessionId, { operationId: submitted.operationId, status: 'processing' });
+// Collects what was submitted and stores it attributed to its пролив.
+const collect = async (owner, sessionId, pending) => {
+  const parts = [];
+  /* eslint-disable no-await-in-loop */
+  for (const job of pending) {
+    const { text, raw } = await pollTranscript(job.operationId);
+    parts.push({
+      brewingNumber: Number(job.brewingNumber) || 0,
+      transcript: text,
+      // Kept beside the readable one because normalization rewrites numbers,
+      // and the field extraction has to read what was said rather than what
+      // the normalizer made of it.
+      transcriptRaw: raw,
+    });
+    await speechkit.cleanup(job.operationId);
+  }
+  /* eslint-enable no-await-in-loop */
 
-  const { text, raw } = await pollTranscript(submitted.operationId);
+  const kept = parts.filter((part) => String(part.transcript || '').trim());
+
   await setVoice(owner, sessionId, {
-    transcript: text,
-    // Kept beside the readable one because normalization rewrites numbers, and
-    // the field extraction has to read what was said rather than what the
-    // normalizer made of it.
-    transcriptRaw: raw,
+    parts: kept,
+    // The flat pair stays: it is what the player shows, and what a record made
+    // before parts existed still falls back to.
+    transcript: joinParts(kept, 'transcript'),
+    transcriptRaw: joinParts(kept, 'transcriptRaw'),
+    pending: [],
     status: 'done',
     operationId: '',
     error: '',
@@ -94,7 +179,6 @@ const transcribe = async (owner, sessionId, trackPath, seconds) => {
     extraction: null,
     extractedAt: null,
   });
-  return speechkit.cleanup(submitted.operationId);
 };
 
 // Merge, then recognise. Resumable: called with an operationId it skips straight
@@ -118,6 +202,17 @@ const run = async (owner, sessionId, resumeOperationId) => {
     const form = await TeaForm.findOne({ owner, sessionId });
     if (!form) return;
 
+    // A restart landed between submitting the проливы and collecting them. The
+    // recognition is already bought; poll it rather than paying for it twice.
+    const outstanding = (form.voice && form.voice.pending) || [];
+    if (outstanding.length) {
+      await collect(owner, sessionId, outstanding.map((job) => ({
+        brewingNumber: job.brewingNumber,
+        operationId: job.operationId,
+      })));
+      return;
+    }
+
     const segments = orderedSegments(form.voice);
     if (!segments.length) {
       await setVoice(owner, sessionId, { status: 'idle' });
@@ -129,20 +224,31 @@ const run = async (owner, sessionId, resumeOperationId) => {
       return;
     }
 
-    const files = [];
+    // Resolved per пролив rather than into one flat list: the grouping is what
+    // recognition is now driven by. A пролив whose files have all gone missing
+    // drops out entirely instead of shifting the others' numbering.
+    const groups = [];
     /* eslint-disable no-await-in-loop */
-    for (const segment of segments) {
-      const filename = path.basename(String(segment.url || ''));
-      if (!ownsUpload(filename, owner)) continue;
-      const file = path.join(uploadDir, filename);
-      if (await readable(file)) files.push(file);
+    for (const { n, segs } of groupSegments(segments)) {
+      const groupFiles = [];
+      for (const segment of segs) {
+        const filename = path.basename(String(segment.url || ''));
+        if (!ownsUpload(filename, owner)) continue;
+        const file = path.join(uploadDir, filename);
+        if (await readable(file)) groupFiles.push(file);
+      }
+      if (groupFiles.length) groups.push({ n, files: groupFiles });
     }
     /* eslint-enable no-await-in-loop */
 
-    if (!files.length) {
+    if (!groups.length) {
       await fail(owner, sessionId, 'Файлы записей не найдены.');
       return;
     }
+
+    // The playable track is still every recording end to end, in пролив order.
+    // Only recognition is split.
+    const files = groups.flatMap((group) => group.files);
 
     await setVoice(owner, sessionId, { status: 'processing', error: '' });
 
@@ -180,7 +286,7 @@ const run = async (owner, sessionId, resumeOperationId) => {
       return;
     }
 
-    await transcribe(owner, sessionId, trackPath, duration);
+    await transcribe(owner, sessionId, groups, duration);
   } catch (err) {
     await fail(owner, sessionId, err.message);
   } finally {
@@ -205,7 +311,7 @@ const enqueue = (owner, sessionId) => {
 const resume = async () => {
   const stuck = await TeaForm.find({
     'voice.status': { $in: ['queued', 'processing'] },
-  }).select('owner sessionId voice.operationId voice.status');
+  }).select('owner sessionId voice.operationId voice.pending voice.status');
 
   stuck.forEach((form) => {
     const operationId = form.voice && form.voice.operationId;
@@ -217,4 +323,6 @@ const resume = async () => {
   return stuck.length;
 };
 
-module.exports = { run, enqueue, resume, orderedSegments };
+module.exports = {
+  run, enqueue, resume, orderedSegments, groupSegments, joinParts,
+};

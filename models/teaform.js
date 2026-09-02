@@ -157,6 +157,35 @@ const userSchema = new mongoose.Schema(
       // and was stored as a 15 g dose. So the extraction reads this one and
       // the reader sees the other. Both come from a single recognition.
       transcriptRaw: { type: String },
+
+      // One entry per пролив that was actually recorded against, in пролив
+      // order. `brewingNumber` here is the user's own: they tapped record
+      // inside that пролив's block. Recognition runs once per пролив so the
+      // boundary survives into the transcript, instead of being merged away
+      // and then guessed at from the words — which silently collapsed several
+      // проливы into one and left the rest with no suggestion at all.
+      //
+      // `transcript` above stays the flat, readable join of these, for the
+      // player and for records recognised before this existed.
+      parts: [
+        {
+          brewingNumber: { type: Number, default: 0 },
+          transcript: { type: String },
+          transcriptRaw: { type: String },
+          _id: false,
+        },
+      ],
+
+      // Recognition jobs submitted to SpeechKit but not yet collected. Written
+      // down between submitting and polling so a restart in that window polls
+      // work already paid for rather than buying it again.
+      pending: [
+        {
+          brewingNumber: { type: Number, default: 0 },
+          operationId: { type: String },
+          _id: false,
+        },
+      ],
       // A recording captures whatever else was in the room — other people, the
       // kitchen, the kids. So sharing the audio is a separate, explicit decision
       // from publishing the tasting text, and it defaults to off.
