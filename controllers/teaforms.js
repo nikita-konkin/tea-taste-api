@@ -23,10 +23,13 @@ const { t } = require('../utils/apiMessages');
 // recognition finished would otherwise save its stale copy back over it.
 const clientSegments = (voice) => {
   if (!voice || !Array.isArray(voice.segments)) return undefined;
-  return voice.segments.map(({ url, brewingNumber, duration }) => ({
+  return voice.segments.map(({
+    url, brewingNumber, duration, whole,
+  }) => ({
     url,
     brewingNumber: Number(brewingNumber) || 0,
     duration: Number(duration) || 0,
+    whole: Boolean(whole),
   }));
 };
 
@@ -624,6 +627,7 @@ module.exports.extractFromVoice = (req, res, next) => {
       const parts = (voice.parts || [])
         .map((part) => ({
           brewingNumber: Number(part.brewingNumber) || 0,
+          whole: Boolean(part.whole),
           transcript: String(part.transcriptRaw || part.transcript || "").trim(),
         }))
         .filter((part) => part.transcript);

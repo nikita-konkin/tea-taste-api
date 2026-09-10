@@ -143,6 +143,12 @@ const userSchema = new mongoose.Schema(
           url: { type: String, required: true },
           brewingNumber: { type: Number, default: 0 },
           duration: { type: Number, default: 0 },
+          // An imported recording of the whole tasting rather than a note about
+          // one пролив. It has no пролив of its own to carry — the проливы are
+          // inside it, named out loud — so it is recognised as its own job and
+          // handed to the extraction labelled as the whole session, with the
+          // splitting left to the numbers the taster spoke.
+          whole: { type: Boolean, default: false },
           _id: false,
         },
       ],
@@ -170,6 +176,10 @@ const userSchema = new mongoose.Schema(
       parts: [
         {
           brewingNumber: { type: Number, default: 0 },
+          // Set when this part came from a whole-session import, so the
+          // extraction is told to split it rather than reading it as one
+          // пролив's note.
+          whole: { type: Boolean, default: false },
           transcript: { type: String },
           transcriptRaw: { type: String },
           _id: false,

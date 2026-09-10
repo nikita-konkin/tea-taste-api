@@ -56,28 +56,37 @@ const orderedSegments = (voice) => [...((voice && voice.segments) || [])]
 // It cannot: a taster describing пролив 4 does not announce "пролив four", so
 // several проливы collapsed into one and the rest got no suggestion at all.
 const groupSegments = (segments) => {
-  const byNumber = new Map();
+  const groups = new Map();
   segments.forEach((segment) => {
     const n = Number(segment.brewingNumber) || 0;
-    if (!byNumber.has(n)) byNumber.set(n, []);
-    byNumber.get(n).push(segment);
+    const whole = Boolean(segment.whole);
+    // Keyed on both: an imported whole-session recording and a general «о чае»
+    // note both carry brewingNumber 0, and merging them would hand the
+    // extraction one blob labelled as a note about the tea.
+    const key = whole ? 'whole' : `n${n}`;
+    if (!groups.has(key)) groups.set(key, { n, whole, segs: [] });
+    groups.get(key).segs.push(segment);
   });
-  return [...byNumber.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([n, segs]) => ({ n, segs }));
+  // The general note first, then the whole-session recording, then the проливы:
+  // the order the flat transcript reads in.
+  return [...groups.values()]
+    .sort((a, b) => (a.n - b.n) || (Number(a.whole) - Number(b.whole)));
 };
 
-const partLabel = (n) => (n ? `Пролив ${n}` : 'О чае');
+const partLabel = (part) => {
+  if (part.whole) return 'Вся сессия';
+  return part.brewingNumber ? `Пролив ${part.brewingNumber}` : 'О чае';
+};
 
 // The flat transcript the reader is shown, rebuilt from the parts. Headed by
 // пролив so the page shows the same structure the extraction now works from —
 // but a lone note is the whole transcript and needs no heading.
 const joinParts = (parts, key) => {
   const rows = parts
-    .map((part) => ({ n: part.brewingNumber, text: String(part[key] || '').trim() }))
+    .map((part) => ({ part, text: String(part[key] || '').trim() }))
     .filter((row) => row.text);
   if (rows.length <= 1) return rows.length ? rows[0].text : '';
-  return rows.map((row) => `${partLabel(row.n)}. ${row.text}`).join('\n');
+  return rows.map((row) => `${partLabel(row.part)}. ${row.text}`).join('\n');
 };
 
 const pollTranscript = async (operationId) => {
@@ -136,7 +145,11 @@ const transcribe = async (owner, sessionId, groups, seconds) => {
   for (const group of groups) {
     const submitted = await submitGroup(group.files);
     if (!submitted.ok) return fail(owner, sessionId, submitted.reason);
-    pending.push({ brewingNumber: group.n, operationId: submitted.operationId });
+    pending.push({
+      brewingNumber: group.n,
+      whole: Boolean(group.whole),
+      operationId: submitted.operationId,
+    });
   }
   /* eslint-enable no-await-in-loop */
 
@@ -152,6 +165,7 @@ const collect = async (owner, sessionId, pending) => {
     const { text, raw } = await pollTranscript(job.operationId);
     parts.push({
       brewingNumber: Number(job.brewingNumber) || 0,
+      whole: Boolean(job.whole),
       transcript: text,
       // Kept beside the readable one because normalization rewrites numbers,
       // and the field extraction has to read what was said rather than what
@@ -208,6 +222,7 @@ const run = async (owner, sessionId, resumeOperationId) => {
     if (outstanding.length) {
       await collect(owner, sessionId, outstanding.map((job) => ({
         brewingNumber: job.brewingNumber,
+        whole: Boolean(job.whole),
         operationId: job.operationId,
       })));
       return;
@@ -229,7 +244,7 @@ const run = async (owner, sessionId, resumeOperationId) => {
     // drops out entirely instead of shifting the others' numbering.
     const groups = [];
     /* eslint-disable no-await-in-loop */
-    for (const { n, segs } of groupSegments(segments)) {
+    for (const { n, whole, segs } of groupSegments(segments)) {
       const groupFiles = [];
       for (const segment of segs) {
         const filename = path.basename(String(segment.url || ''));
@@ -237,7 +252,7 @@ const run = async (owner, sessionId, resumeOperationId) => {
         const file = path.join(uploadDir, filename);
         if (await readable(file)) groupFiles.push(file);
       }
-      if (groupFiles.length) groups.push({ n, files: groupFiles });
+      if (groupFiles.length) groups.push({ n, whole, files: groupFiles });
     }
     /* eslint-enable no-await-in-loop */
 

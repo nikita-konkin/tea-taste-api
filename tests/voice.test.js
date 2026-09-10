@@ -631,6 +631,68 @@ describe('each пролив is recognised on its own', () => {
   }, 60000);
 });
 
+// A recording made outside the app and imported whole: one file, every пролив
+// inside it, boundaries carried by the numbers the taster spoke rather than by
+// which block the file was dropped into.
+describe('a whole-session import', () => {
+  test('is its own recognition job, never merged with the «о чае» note', async () => {
+    process.env.YC_API_KEY = 'test-key';
+    process.env.YC_FOLDER_ID = 'test-folder';
+
+    const said = ['общая заметка', 'первый пролив лёгкий второй пролив терпкий'];
+    const bodies = new Map();
+    let submitted = 0;
+
+    global.fetch = jest.fn(async (url) => {
+      const target = String(url);
+      if (target.includes('/recognizeFileAsync')) {
+        const id = `op-whole-${submitted}`;
+        bodies.set(id, JSON.stringify({
+          result: { final: { alternatives: [{ text: said[submitted] }] } },
+        }));
+        submitted += 1;
+        return jsonRes({ id });
+      }
+      if (target.includes('/operations/')) return jsonRes({ done: true });
+      if (target.includes('/getRecognition')) {
+        const id = decodeURIComponent(target.split('operationId=')[1] || '');
+        return textRes(bodies.get(id) || '');
+      }
+      if (target.includes('/deleteRecognition')) return textRes('');
+      throw new Error(`unexpected fetch: ${target}`);
+    });
+
+    const general = await placeSegment(2);
+    const session = await placeSegment(2);
+
+    await setVoice({
+      // Both carry brewingNumber 0. Grouped by number alone they would become
+      // one job and the whole tasting would be read as a note about the tea.
+      'voice.segments': [
+        { url: general, brewingNumber: 0, duration: 2 },
+        { url: session, brewingNumber: 0, duration: 2, whole: true },
+      ],
+      'voice.status': 'queued',
+      'voice.transcript': '',
+      'voice.parts': [],
+      'voice.track': { url: '', duration: 0 },
+    });
+
+    await voiceJob.run(userIdA, PID);
+
+    const form = await getForm();
+    expect(submitted).toBe(2);
+    expect(form.voice.parts.map((p) => Boolean(p.whole))).toEqual([false, true]);
+    expect(form.voice.parts[0].transcript).toBe('общая заметка');
+    expect(form.voice.parts[1].transcript).toBe('первый пролив лёгкий второй пролив терпкий');
+    // The flat transcript names it for what it is.
+    expect(form.voice.transcript).toContain('Вся сессия.');
+    expect(form.voice.transcript).toContain('О чае.');
+
+    created.push(path.basename(form.voice.track.url));
+  }, 60000);
+});
+
 describe('the transcript handed to the extractor', () => {
   const { userText } = require('../utils/extractForm');
 
@@ -648,6 +710,17 @@ describe('the transcript handed to the extractor', () => {
     // error to tidy away by renumbering.
     expect(text).not.toContain('[Пролив 2]');
     expect(text).not.toContain('[Пролив 3]');
+  });
+
+  test('a whole-session import is labelled as such, not as a пролив note', () => {
+    const text = userText([
+      { brewingNumber: 0, whole: true, transcript: 'первый пролив лёгкий второй пролив терпкий' },
+    ]);
+
+    // «[О чае]» measurably cost the descriptors: the model read the whole
+    // tasting as one general remark and returned no aromas or tastes at all.
+    expect(text).toContain('[Вся сессия] первый пролив');
+    expect(text).not.toContain('[О чае]');
   });
 
   test('one undivided recording is passed through unlabelled', () => {

@@ -71,6 +71,7 @@ const teaFormValidation = celebrate({
           url: Joi.string().pattern(UPLOAD_URL).required(),
           brewingNumber: Joi.number().integer().min(0).max(50),
           duration: Joi.number().min(0).max(600),
+          whole: Joi.boolean(),
         }),
       ),
       track: Joi.object().keys({
@@ -85,6 +86,7 @@ const teaFormValidation = celebrate({
       parts: Joi.array().max(60).items(
         Joi.object().keys({
           brewingNumber: Joi.number().integer().min(0).max(50),
+          whole: Joi.boolean(),
           transcript: Joi.string().allow('').max(20000),
           transcriptRaw: Joi.string().allow('').max(20000),
         }),
