@@ -14,7 +14,7 @@ const suggestionSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 suggestionSchema.index({ createdAt: -1 });

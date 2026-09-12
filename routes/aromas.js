@@ -1,7 +1,7 @@
-const privateRouter = require("express").Router();
-const publicRouter = require("express").Router();
+const privateRouter = require('express').Router();
+const publicRouter = require('express').Router();
 
-const { celebrate, Joi } = require("celebrate");
+const { celebrate, Joi } = require('celebrate');
 
 const {
   createAroma,
@@ -11,10 +11,10 @@ const {
   delAromaSelective,
   getAllFromAromaDB,
   getPublicAromas,
-  } = require("../controllers/aromas");
+} = require('../controllers/aromas');
 
 privateRouter.post(
-  "/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId",
+  '/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId',
   celebrate({
     body: Joi.object().keys({
       aromaStage1: Joi.string().min(2).max(30).required(),
@@ -28,11 +28,11 @@ privateRouter.post(
       aromaId: Joi.number().integer().required(),
     }),
   }),
-  createAroma
+  createAroma,
 );
 
 privateRouter.patch(
-  "/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId",
+  '/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId',
   celebrate({
     body: Joi.object().keys({
       aromaStage1: Joi.string().min(2).max(30),
@@ -46,15 +46,15 @@ privateRouter.patch(
       aromaId: Joi.number().integer().required(),
     }),
   }),
-  patchAroma
+  patchAroma,
 );
 
-privateRouter.get("/my-aromas/:sessionId", getAromas);
-privateRouter.get("/aromadb", getAllFromAromaDB);
-privateRouter.delete("/my-aromas/:sessionId", delAromaBySessionID);
-privateRouter.delete("/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId", delAromaSelective);
+privateRouter.get('/my-aromas/:sessionId', getAromas);
+privateRouter.get('/aromadb', getAllFromAromaDB);
+privateRouter.delete('/my-aromas/:sessionId', delAromaBySessionID);
+privateRouter.delete('/my-aromas/:sessionId/brew/:brewId/aroma/:aromaId', delAromaSelective);
 
-publicRouter.get("/public-aromas/:sessionId", getPublicAromas);
+publicRouter.get('/public-aromas/:sessionId', getPublicAromas);
 
 module.exports.publicRouter = publicRouter;
 module.exports.privateRouter = privateRouter;

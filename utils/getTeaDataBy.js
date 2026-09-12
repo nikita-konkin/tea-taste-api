@@ -1,12 +1,12 @@
 module.exports.getTeaDataBySessionIdAndOwner = (req, res, next, schema) => {
   const owner = req.user._id;
-  const sessionId = req.params.sessionId;
+  const { sessionId } = req.params;
 
-  schema.find({ owner: owner, sessionId: sessionId })
+  schema.find({ owner, sessionId })
     .then((response) =>
       res.send({
         data: response,
-      })
+      }),
     )
     .catch((err) => {
       const e = new Error(err.message);
@@ -16,13 +16,13 @@ module.exports.getTeaDataBySessionIdAndOwner = (req, res, next, schema) => {
 };
 
 module.exports.getTeaDataBySessionIdAndPublicAccess = (req, res, next, schema) => {
-  const sessionId = req.params.sessionId;
+  const { sessionId } = req.params;
 
-  schema.find({ sessionId: sessionId, publicAccess: true })
+  schema.find({ sessionId, publicAccess: true })
     .then((response) =>
       res.send({
         data: response,
-      })
+      }),
     )
     .catch((err) => {
       const e = new Error(err.message);

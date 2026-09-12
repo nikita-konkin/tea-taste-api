@@ -1,7 +1,7 @@
-const privateRouter = require("express").Router();
-const publicRouter = require("express").Router();
+const privateRouter = require('express').Router();
+const publicRouter = require('express').Router();
 
-const { celebrate, Joi } = require("celebrate");
+const { celebrate, Joi } = require('celebrate');
 
 const {
   createBrew,
@@ -10,17 +10,17 @@ const {
   delBrewSelective,
   patchBrew,
   getPublicBrews,
-   } = require("../controllers/brewings");
+} = require('../controllers/brewings');
 
 privateRouter.get('/my-brewings/:sessionId', getBrews);
 privateRouter.post(
-  "/my-brewings/:sessionId/brew/:brewId",
+  '/my-brewings/:sessionId/brew/:brewId',
   celebrate({
     body: Joi.object().keys({
       description: Joi.string().min(1).max(2000),
       brewingRating: Joi.number().integer(),
       brewingTime: Joi.string().regex(
-        /^(2[0-3]|[01]?[0-9]):([0-5]?[0-9]):([0-5]?[0-9])$/
+        /^(2[0-3]|[01]?[0-9]):([0-5]?[0-9]):([0-5]?[0-9])$/,
       ),
       publicAccess: Joi.boolean().required(),
     }),
@@ -29,10 +29,10 @@ privateRouter.post(
       brewId: Joi.number().integer().required(),
     }),
   }),
-  createBrew
+  createBrew,
 );
 privateRouter.patch(
-  "/my-brewings/:sessionId/brew/:brewId",
+  '/my-brewings/:sessionId/brew/:brewId',
   celebrate({
     body: Joi.object().keys({
       // aromas: Joi.array().required(),
@@ -40,27 +40,27 @@ privateRouter.patch(
       description: Joi.string().min(2).max(2000),
       brewingRating: Joi.number().integer(),
       brewingTime: Joi.string().regex(
-        /^(2[0-3]|[01]?[0-9]):([0-5]?[0-9]):([0-5]?[0-9])$/
+        /^(2[0-3]|[01]?[0-9]):([0-5]?[0-9]):([0-5]?[0-9])$/,
       ),
-      publicAccess: Joi.boolean()
+      publicAccess: Joi.boolean(),
     }),
     params: Joi.object().keys({
       sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
       brewId: Joi.number().integer().required(),
     }),
   }),
-  patchBrew
+  patchBrew,
 );
-privateRouter.delete("/my-brews/:sessionId", delBrewsBySessionID);
+privateRouter.delete('/my-brews/:sessionId', delBrewsBySessionID);
 privateRouter.delete(
-  "/my-brewings/:sessionId/brew/:brewId",
+  '/my-brewings/:sessionId/brew/:brewId',
   celebrate({
     params: Joi.object().keys({
       sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
       brewId: Joi.number().integer().required(),
     }),
   }),
-  delBrewSelective
+  delBrewSelective,
 );
 
 publicRouter.get('/public-brewings/:sessionId', getPublicBrews);

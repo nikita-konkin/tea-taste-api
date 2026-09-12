@@ -35,7 +35,6 @@ const {
 
 const FEED_LIMIT = 10;
 
-
 const esc = (text) => String(text === undefined || text === null ? '' : text)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')

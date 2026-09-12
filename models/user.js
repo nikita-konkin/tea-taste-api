@@ -100,7 +100,7 @@ const userSchema = new mongoose.Schema({
     select: false,
   },
 },
-  { timestamps: true }
-  );
+{ timestamps: true },
+);
 
 module.exports = mongoose.model('user', userSchema);

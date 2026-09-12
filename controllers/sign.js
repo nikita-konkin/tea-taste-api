@@ -20,12 +20,12 @@ module.exports.loginUser = (req, res, next) => {
 
       const token = jwt.sign(
         { _id: user._id },
-        NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret'
+        NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret',
       );
 
       res.cookie('jwt', token, {
         maxAge: 180 * 24 * 60 * 60 * 1000,
-        httpOnly: NODE_ENV == 'production' ? true : false,
+        httpOnly: NODE_ENV == 'production',
         secure: NODE_ENV === 'production',
         domain: NODE_ENV == 'production' ? '.teaform.ru' : '',
         // sameSite: 'None',
@@ -67,13 +67,12 @@ module.exports.createUser = (req, res, next) => {
     .catch((err) => {
       if (err.statusCode) {
         return next({ message: err.message, statusCode: err.statusCode });
-      } else if (err.name === 'ValidationError') {
+      } if (err.name === 'ValidationError') {
         return next({ message: t(req, 'api.badData'), statusCode: 400 });
-      } else if (err.code === 11000) {
+      } if (err.code === 11000) {
         return next({ message: t(req, 'api.emailTaken'), statusCode: 409 });
-      } else {
-        return next({ message: t(req, 'api.default'), statusCode: 500 });
       }
+      return next({ message: t(req, 'api.default'), statusCode: 500 });
     });
 };
 

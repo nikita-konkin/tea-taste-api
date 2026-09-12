@@ -13,7 +13,7 @@ const {
   getVoiceStatus,
   extractFromVoice,
   retryVoice,
-} = require("../controllers/teaforms");
+} = require('../controllers/teaforms');
 
 // Shared by the photo and voice URLs. Anchored, with a required extension:
 // that is what rejects a bare ".." segment as well as an off-site address.
@@ -124,26 +124,26 @@ publicRouter.get('/public-form/:sessionId', celebrate({
 
 const privateRouter = express.Router();
 
-privateRouter.get("/my-forms", getTeaForms);
-privateRouter.get("/my-form/:sessionId", getTeaFormsByID);
-privateRouter.get("/my-form/:sessionId/voice", celebrate({
+privateRouter.get('/my-forms', getTeaForms);
+privateRouter.get('/my-form/:sessionId', getTeaFormsByID);
+privateRouter.get('/my-form/:sessionId/voice', celebrate({
   params: Joi.object().keys({
     sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 }), getVoiceStatus);
-privateRouter.post("/my-form/:sessionId/voice/retry", celebrate({
+privateRouter.post('/my-form/:sessionId/voice/retry', celebrate({
   params: Joi.object().keys({
     sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 }), retryVoice);
-privateRouter.post("/my-form/:sessionId/extract", celebrate({
+privateRouter.post('/my-form/:sessionId/extract', celebrate({
   params: Joi.object().keys({
     sessionId: Joi.string().guid({ version: 'uuidv4' }).required(),
   }),
 }), extractFromVoice);
-privateRouter.delete("/my-form/:sessionId", delTeaFormBySessionID);
-privateRouter.post("/create-form/:sessionId", teaFormValidation, createTeaForm);
-privateRouter.patch("/create-form/:sessionId", teaFormValidation, patchTeaForm);
+privateRouter.delete('/my-form/:sessionId', delTeaFormBySessionID);
+privateRouter.post('/create-form/:sessionId', teaFormValidation, createTeaForm);
+privateRouter.patch('/create-form/:sessionId', teaFormValidation, patchTeaForm);
 
 module.exports.publicRouter = publicRouter;
 module.exports.privateRouter = privateRouter;

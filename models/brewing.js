@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
 
@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
   },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "user",
+    ref: 'user',
     required: true,
   },
   publicAccess: {
@@ -37,4 +37,4 @@ const userSchema = new mongoose.Schema({
 
 userSchema.index({ owner: 1, sessionId: 1 });
 
-module.exports = mongoose.model("brewing", userSchema);
+module.exports = mongoose.model('brewing', userSchema);

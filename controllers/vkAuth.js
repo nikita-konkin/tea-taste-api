@@ -134,11 +134,11 @@ module.exports.vkCallback = async (req, res) => {
 
     const token = jwt.sign(
       { _id: user._id },
-      NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret'
+      NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret',
     );
     res.cookie('jwt', token, {
       maxAge: 180 * 24 * 60 * 60 * 1000,
-      httpOnly: NODE_ENV == 'production' ? true : false,
+      httpOnly: NODE_ENV == 'production',
       secure: NODE_ENV === 'production',
       domain: NODE_ENV == 'production' ? '.teaform.ru' : '',
     });

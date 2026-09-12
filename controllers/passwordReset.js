@@ -31,9 +31,9 @@ async function deliverResetLink(email, link) {
     from: SMTP_FROM || SMTP_USER,
     to: email,
     subject: 'Восстановление пароля — Форма Чая',
-    text: `Вы запросили восстановление пароля на teaform.\n\n`
+    text: 'Вы запросили восстановление пароля на teaform.\n\n'
       + `Перейдите по ссылке, чтобы задать новый пароль (действует 1 час):\n${link}\n\n`
-      + `Если вы не запрашивали восстановление — просто проигнорируйте это письмо.`,
+      + 'Если вы не запрашивали восстановление — просто проигнорируйте это письмо.',
   });
 }
 
@@ -54,7 +54,7 @@ module.exports.requestPasswordReset = async (req, res, next) => {
       {
         passwordResetToken: hashToken(token),
         passwordResetExpires: new Date(Date.now() + RESET_TOKEN_TTL_MS),
-      }
+      },
     );
 
     const base = process.env.FRONTEND_URL || 'https://teaform.ru';
@@ -95,7 +95,7 @@ module.exports.confirmPasswordReset = async (req, res, next) => {
       {
         password: hash,
         $unset: { passwordResetToken: 1, passwordResetExpires: 1 },
-      }
+      },
     );
 
     return res.send({ ok: true, message: t(req, 'api.passwordChangedSignIn') });

@@ -1,20 +1,20 @@
-const path = require("path");
-const fs = require("fs");
+const path = require('path');
+const fs = require('fs');
 
-const TeaForm = require("../models/teaform");
-const Brewing = require("../models/brewing");
-const Aroma = require("../models/aroma");
-const Taste = require("../models/taste");
-const { delBySessionID } = require("../utils/delAllDocsFromCollection");
-const { getTeaDataBySessionIdAndOwner } = require("../utils/getTeaDataBy")
-const { uploadDir } = require("../middlewares/upload");
-const { ownsUpload } = require("./uploads");
-const { enqueue } = require("../utils/voiceJob");
-const { extractFromTranscript } = require("../utils/extractForm");
-const { buildSlug, looksLikeUuid, isDuplicateSlug } = require("../utils/slugify");
-const { orderedPhotoUrls } = require("../utils/photos");
-const { teaTypeSlugs } = require("../utils/teaTypes");
-const { LOCALES, DEFAULT_LOCALE, LOCALE_TAG, localizePath } = require("../utils/locale");
+const TeaForm = require('../models/teaform');
+const Brewing = require('../models/brewing');
+const Aroma = require('../models/aroma');
+const Taste = require('../models/taste');
+const { delBySessionID } = require('../utils/delAllDocsFromCollection');
+const { getTeaDataBySessionIdAndOwner } = require('../utils/getTeaDataBy');
+const { uploadDir } = require('../middlewares/upload');
+const { ownsUpload } = require('./uploads');
+const { enqueue } = require('../utils/voiceJob');
+const { extractFromTranscript } = require('../utils/extractForm');
+const { buildSlug, looksLikeUuid, isDuplicateSlug } = require('../utils/slugify');
+const { orderedPhotoUrls } = require('../utils/photos');
+const { teaTypeSlugs } = require('../utils/teaTypes');
+const { LOCALES, DEFAULT_LOCALE, LOCALE_TAG, localizePath } = require('../utils/locale');
 const { t } = require('../utils/apiMessages');
 
 // Only `segments` is the client's to send. Everything else under `voice` —
@@ -51,12 +51,12 @@ module.exports.createTeaForm = (req, res, next) => {
     description,
     dryAromaDescription,
     photos,
-    voice
+    voice,
   } = req.body;
   // const { aromas, tastes, brewingRating, brewingTime } = req.body;
 
   const owner = req.user._id;
-  const sessionId = req.params.sessionId;
+  const { sessionId } = req.params;
   // const brewingCount = req.params.brewId;
 
   // A tasting saved from a recording alone has no name yet — the transcript has
@@ -67,18 +67,18 @@ module.exports.createTeaForm = (req, res, next) => {
   // Month names are spelled out rather than left to toLocaleDateString: the
   // alpine image ships a small-ICU node, which would quietly answer in English.
   const MONTHS_RU = [
-    "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
   ];
   const today = new Date();
-  const title = (nameRU || "").trim()
+  const title = (nameRU || '').trim()
     || `Дегустация ${today.getDate()} ${MONTHS_RU[today.getMonth()]}`;
 
   const segments = clientSegments(voice);
   // "queued" is what the transcription job looks for; with no recordings the
   // key is omitted entirely and the model's own default applies.
   const voiceDoc = segments && segments.length
-    ? { segments, status: "queued", public: false }
+    ? { segments, status: 'queued', public: false }
     : undefined;
 
   // A tasting that carries a recording is never published on creation: the
@@ -88,37 +88,37 @@ module.exports.createTeaForm = (req, res, next) => {
 
   const insert = (slug) => TeaForm.updateMany(
     {
-      sessionId: sessionId,
-      owner: owner,
+      sessionId,
+      owner,
     },
     {
       $setOnInsert: {
         nameRU: title,
-        country: country,
-        shop: shop,
-        type: type,
-        weight: weight,
-        water: water,
-        volume: volume,
-        temperature: temperature,
-        price: price,
-        teaware: teaware,
-        brewingtype: brewingtype,
+        country,
+        shop,
+        type,
+        weight,
+        water,
+        volume,
+        temperature,
+        price,
+        teaware,
+        brewingtype,
         publicAccess: publishable,
-        description: description,
-        dryAromaDescription: dryAromaDescription,
-        sessionId: sessionId,
+        description,
+        dryAromaDescription,
+        sessionId,
         // Omitted rather than written empty when there is none: the unique index
         // ignores a missing slug but treats '' as a value two documents would be
         // colliding on.
         ...(slug ? { slug } : {}),
-        owner: owner,
-        averageRating: averageRating,
-        photos: photos,
-        voice: voiceDoc
+        owner,
+        averageRating,
+        photos,
+        voice: voiceDoc,
       },
     },
-    { upsert: true }
+    { upsert: true },
   );
 
   // The readable URL is an alias, not the tasting's identity — sessionId always
@@ -140,7 +140,7 @@ module.exports.createTeaForm = (req, res, next) => {
       });
     })
     .catch((err) => {
-      if (err.name === "ValidationError") {
+      if (err.name === 'ValidationError') {
         const e = new Error(t(req, 'api.badData'));
         e.statusCode = 400;
         next(e);
@@ -153,18 +153,16 @@ module.exports.createTeaForm = (req, res, next) => {
 };
 
 module.exports.getTeaFormsByID = (req, res, next) => {
-
-  getTeaDataBySessionIdAndOwner(req, res, next, TeaForm)
-
+  getTeaDataBySessionIdAndOwner(req, res, next, TeaForm);
 };
 
 module.exports.getTeaForms = (req, res, next) => {
   const owner = req.user._id;
-  TeaForm.find({ owner: owner })
+  TeaForm.find({ owner })
     .then((forms) =>
       res.send({
         data: forms,
-      })
+      }),
     )
     .catch((err) => {
       const e = new Error(err.message);
@@ -372,10 +370,9 @@ module.exports.getPublicTeaFormById = (req, res, next) => {
         next(e);
       }
     });
-}
+};
 
 module.exports.patchTeaForm = (req, res, next) => {
-
   const {
     nameRU,
     country,
@@ -393,32 +390,32 @@ module.exports.patchTeaForm = (req, res, next) => {
     description,
     dryAromaDescription,
     photos,
-    voice
+    voice,
   } = req.body;
   // const { aromas, tastes, brewingRating, brewingTime } = req.body;
 
   const owner = req.user._id;
-  const sessionId = req.params.sessionId;
+  const { sessionId } = req.params;
 
   const update = {
-    nameRU: nameRU,
-    country: country,
-    shop: shop,
-    type: type,
-    weight: weight,
-    water: water,
-    volume: volume,
-    temperature: temperature,
-    price: price,
-    teaware: teaware,
-    brewingtype: brewingtype,
-    publicAccess: publicAccess,
-    averageRating: averageRating,
-    description: description,
-    dryAromaDescription: dryAromaDescription,
+    nameRU,
+    country,
+    shop,
+    type,
+    weight,
+    water,
+    volume,
+    temperature,
+    price,
+    teaware,
+    brewingtype,
+    publicAccess,
+    averageRating,
+    description,
+    dryAromaDescription,
     // Mongoose drops undefined keys from the cast update, so omitting photos
     // preserves them, while an explicit [] clears them.
-    photos: photos
+    photos,
     // $set: {
     // sessionId: sessionId,
     // owner: owner,
@@ -434,8 +431,8 @@ module.exports.patchTeaForm = (req, res, next) => {
 
   // Sharing the recording is the owner's call and is edited on its own, without
   // touching the segments — so it is handled apart from the block below.
-  if (voice && typeof voice.public === "boolean") {
-    update["voice.public"] = voice.public;
+  if (voice && typeof voice.public === 'boolean') {
+    update['voice.public'] = voice.public;
   }
 
   const segments = clientSegments(voice);
@@ -443,25 +440,25 @@ module.exports.patchTeaForm = (req, res, next) => {
     // Sub-paths, deliberately: assigning `voice` as a whole object would
     // replace the entire subdocument and take the transcript and merged track
     // with it, even though the client never sent either.
-    update["voice.segments"] = segments;
-    update["voice.status"] = segments.length ? "queued" : "idle";
-    update["voice.error"] = "";
+    update['voice.segments'] = segments;
+    update['voice.status'] = segments.length ? 'queued' : 'idle';
+    update['voice.error'] = '';
     if (!segments.length) {
-      update["voice.transcript"] = "";
-      update["voice.transcriptRaw"] = "";
-      update["voice.parts"] = [];
-      update["voice.pending"] = [];
-      update["voice.operationId"] = "";
-      update["voice.track"] = { url: "", duration: 0 };
-      update["voice.extraction"] = null;
-      update["voice.extractedAt"] = null;
+      update['voice.transcript'] = '';
+      update['voice.transcriptRaw'] = '';
+      update['voice.parts'] = [];
+      update['voice.pending'] = [];
+      update['voice.operationId'] = '';
+      update['voice.track'] = { url: '', duration: 0 };
+      update['voice.extraction'] = null;
+      update['voice.extractedAt'] = null;
     }
   }
 
   // A blocked tasting cannot be published again by its owner. Expressed as part
   // of the filter so there is no read-then-write window between the check and
   // the update; the miss is told apart from a genuine 404 below.
-  const filter = { sessionId: sessionId, owner: owner };
+  const filter = { sessionId, owner };
   if (publicAccess === true) filter.blocked = { $ne: true };
 
   // Same rule as creation: the slug is cosmetic and sessionId always resolves,
@@ -476,7 +473,7 @@ module.exports.patchTeaForm = (req, res, next) => {
     })
     .then(async (form) => {
       if (!form && publicAccess === true) {
-        const blockedForm = await TeaForm.findOne({ sessionId, owner }).select("blocked");
+        const blockedForm = await TeaForm.findOne({ sessionId, owner }).select('blocked');
         if (blockedForm && blockedForm.blocked) {
           const e = new Error(t(req, 'api.blockedCannotPublish'));
           e.statusCode = 403;
@@ -489,7 +486,7 @@ module.exports.patchTeaForm = (req, res, next) => {
       // teaform published the tasting while leaving its проливы invisible —
       // reachable for any recording, since those are forced private at creation
       // and therefore always published by a later toggle.
-      if (typeof publicAccess === "boolean") {
+      if (typeof publicAccess === 'boolean') {
         await Promise.all([
           Brewing.updateMany({ owner, sessionId }, { publicAccess }),
           Aroma.updateMany({ owner, sessionId }, { publicAccess }),
@@ -507,7 +504,7 @@ module.exports.patchTeaForm = (req, res, next) => {
       // this it would reach the user as a generic 500.
       if (err.statusCode) {
         next(err);
-      } else if (err.name === "ValidationError") {
+      } else if (err.name === 'ValidationError') {
         const e = new Error(t(req, 'api.badData'));
         e.statusCode = 400;
         next(e);
@@ -517,14 +514,14 @@ module.exports.patchTeaForm = (req, res, next) => {
         next(e);
       }
     });
-}
+};
 
 // Small polling target for the recorder UI: the merge and the recognition are
 // both slower than a request, so the frontend watches this rather than refetching
 // the whole tasting every few seconds.
 module.exports.getVoiceStatus = (req, res, next) => {
   TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
-    .select("voice")
+    .select('voice')
     .orFail(() => {
       const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
@@ -534,10 +531,10 @@ module.exports.getVoiceStatus = (req, res, next) => {
       const voice = form.voice || {};
       res.send({
         data: {
-          status: voice.status || "idle",
-          transcript: voice.transcript || "",
+          status: voice.status || 'idle',
+          transcript: voice.transcript || '',
           track: voice.track || null,
-          error: voice.error || "",
+          error: voice.error || '',
         },
       });
     })
@@ -555,7 +552,7 @@ module.exports.getVoiceStatus = (req, res, next) => {
 // effectively lost, even though the audio is sitting safely on disk.
 module.exports.retryVoice = (req, res, next) => {
   TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
-    .select("voice")
+    .select('voice')
     .orFail(() => {
       const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
@@ -573,10 +570,10 @@ module.exports.retryVoice = (req, res, next) => {
       // from the segments, so a track lost to a half-finished run is rebuilt too.
       return TeaForm.updateOne(
         { owner: req.user._id, sessionId: req.params.sessionId },
-        { "voice.status": "queued", "voice.error": "", "voice.operationId": "" }
+        { 'voice.status': 'queued', 'voice.error': '', 'voice.operationId': '' },
       ).then(() => {
         enqueue(req.user._id, req.params.sessionId);
-        res.send({ data: { status: "queued" } });
+        res.send({ data: { status: 'queued' } });
       });
     })
     .catch((err) => {
@@ -592,7 +589,7 @@ module.exports.retryVoice = (req, res, next) => {
 // costs a rejected suggestion rather than overwritten data.
 module.exports.extractFromVoice = (req, res, next) => {
   TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
-    .select("voice")
+    .select('voice')
     .orFail(() => {
       const e = new Error(t(req, 'api.notFound'));
       e.statusCode = 404;
@@ -609,7 +606,7 @@ module.exports.extractFromVoice = (req, res, next) => {
           data: voice.extraction.data,
           droppedPaths: voice.extraction.droppedPaths || [],
           offTopic: Boolean(voice.extraction.offTopic),
-          topic: voice.extraction.topic || "",
+          topic: voice.extraction.topic || '',
           cached: true,
           extractedAt: voice.extractedAt,
         });
@@ -628,16 +625,16 @@ module.exports.extractFromVoice = (req, res, next) => {
         .map((part) => ({
           brewingNumber: Number(part.brewingNumber) || 0,
           whole: Boolean(part.whole),
-          transcript: String(part.transcriptRaw || part.transcript || "").trim(),
+          transcript: String(part.transcriptRaw || part.transcript || '').trim(),
         }))
         .filter((part) => part.transcript);
 
       const source = parts.length
         ? parts
-        : (voice.transcriptRaw || voice.transcript || "").trim();
+        : (voice.transcriptRaw || voice.transcript || '').trim();
 
       if (!source.length) {
-        const e = new Error("Расшифровка ещё не готова.");
+        const e = new Error('Расшифровка ещё не готова.');
         e.statusCode = 409;
         throw e;
       }
@@ -653,13 +650,13 @@ module.exports.extractFromVoice = (req, res, next) => {
           data: result.data,
           droppedPaths: result.droppedPaths,
           offTopic: Boolean(result.offTopic),
-          topic: result.topic || "",
+          topic: result.topic || '',
         };
         // Saved before responding: if the write fails the client would otherwise
         // believe the result is cached and never be able to ask again.
         return TeaForm.updateOne(
           { owner: req.user._id, sessionId: req.params.sessionId },
-          { "voice.extraction": stored, "voice.extractedAt": new Date() }
+          { 'voice.extraction': stored, 'voice.extractedAt': new Date() },
         ).then(() => res.send({ ...stored, cached: false }));
       });
     })
@@ -677,7 +674,7 @@ module.exports.extractFromVoice = (req, res, next) => {
 // is the same one the delete endpoint uses.
 const unlinkFormFiles = (urls, ownerId) => {
   urls.forEach((url) => {
-    const filename = path.basename(String(url || ""));
+    const filename = path.basename(String(url || ''));
     if (!ownsUpload(filename, ownerId)) return;
     fs.promises.unlink(path.join(uploadDir, filename)).catch(() => {});
   });
@@ -689,7 +686,7 @@ const formFileUrls = (form) => {
   return [
     ...(form.photos || []).map((photo) => photo.url),
     ...(voice.segments || []).map((segment) => segment.url),
-    (voice.track && voice.track.url) || "",
+    (voice.track && voice.track.url) || '',
   ].filter(Boolean);
 };
 
@@ -700,16 +697,14 @@ module.exports.unlinkFormFiles = unlinkFormFiles;
 module.exports.formFileUrls = formFileUrls;
 
 module.exports.delTeaFormBySessionID = (req, res, next) => {
-
   // Read the file list before delBySessionID removes the document.
   TeaForm.findOne({ owner: req.user._id, sessionId: req.params.sessionId })
     .catch(() => null)
     .then((form) => {
       const urls = formFileUrls(form);
-      res.on("finish", () => {
+      res.on('finish', () => {
         if (res.statusCode < 400) unlinkFormFiles(urls, req.user._id);
       });
       delBySessionID(req, res, next, TeaForm);
     });
-
 };

@@ -33,10 +33,11 @@ router.get('/profile/me', getUserById);
 router.patch('/profile/me', celebrate({
   body: Joi.object().keys({
     name: Joi.string().min(2).max(30),
-    nickname: Joi.string().min(2).max(30).allow('').messages({
-      'string.min': 'Никнейм должен быть не короче {#limit} символов.',
-      'string.max': 'Никнейм должен быть не длиннее {#limit} символов.',
-    }),
+    nickname: Joi.string().min(2).max(30).allow('')
+      .messages({
+        'string.min': 'Никнейм должен быть не короче {#limit} символов.',
+        'string.max': 'Никнейм должен быть не длиннее {#limit} символов.',
+      }),
     email: Joi.string().email(),
     career: Joi.string().min(2).max(100).allow(''),
     about: Joi.string().min(2).max(500).allow(''),

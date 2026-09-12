@@ -32,8 +32,8 @@ let cookieA;
 let cookieB;
 let userIdA;
 
-const created = [];   // filenames inside uploadDir
-const tmpFiles = [];  // fixtures in the OS temp dir
+const created = []; // filenames inside uploadDir
+const tmpFiles = []; // fixtures in the OS temp dir
 
 // Real recordings rather than mocked ones: ffmpeg is in the image because voice
 // notes need it, so the transcode and concat paths can be exercised for real.
@@ -731,81 +731,81 @@ describe('the transcript handed to the extractor', () => {
 });
 
 describe('the recording is withheld from public views until shared', () => {
-    beforeAll(async () => {
-        await request(app).patch(`/create-form/${PID}`).set('Cookie', cookieA)
-            .send({ ...formBody, publicAccess: true });
-        await setVoice({
-            'voice.segments': [{ url: '/api/uploads/a-1.mp3', brewingNumber: 1, duration: 12 }],
-            'voice.track': { url: '/api/uploads/a-track.mp3', duration: 12 },
-            'voice.transcript': 'Слышно как в комнате разговаривают.',
-            'voice.status': 'done',
-            'voice.public': false,
-        });
+  beforeAll(async () => {
+    await request(app).patch(`/create-form/${PID}`).set('Cookie', cookieA)
+      .send({ ...formBody, publicAccess: true });
+    await setVoice({
+      'voice.segments': [{ url: '/api/uploads/a-1.mp3', brewingNumber: 1, duration: 12 }],
+      'voice.track': { url: '/api/uploads/a-track.mp3', duration: 12 },
+      'voice.transcript': 'Слышно как в комнате разговаривают.',
+      'voice.status': 'done',
+      'voice.public': false,
     });
+  });
 
-    test('a public tasting does not expose an unshared recording', async () => {
-        const res = await request(app).get(`/public-form/${PID}`);
-        expect(res.status).toBe(200);
-        // Published as a tasting...
-        expect(res.body.data.nameRU).toBe(formBody.nameRU);
-        // ...but the audio is not in the payload at all.
-        expect(res.body.data.voice).toBeUndefined();
-        expect(JSON.stringify(res.body)).not.toContain('в комнате разговаривают');
-        expect(JSON.stringify(res.body)).not.toContain('a-track.mp3');
+  test('a public tasting does not expose an unshared recording', async () => {
+    const res = await request(app).get(`/public-form/${PID}`);
+    expect(res.status).toBe(200);
+    // Published as a tasting...
+    expect(res.body.data.nameRU).toBe(formBody.nameRU);
+    // ...but the audio is not in the payload at all.
+    expect(res.body.data.voice).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain('в комнате разговаривают');
+    expect(JSON.stringify(res.body)).not.toContain('a-track.mp3');
+  });
+
+  test('the public feed does not expose it either', async () => {
+    const res = await request(app).get('/public-forms');
+    expect(res.status).toBe(200);
+    const mine = res.body.data.find((form) => form.sessionId === PID);
+    expect(mine).toBeDefined();
+    expect(mine.voice).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain('a-track.mp3');
+  });
+
+  test('the owner still sees their own recording', async () => {
+    const res = await request(app).get(`/my-form/${PID}`).set('Cookie', cookieA);
+    expect(res.status).toBe(200);
+    // This endpoint answers with find(), so data is an array.
+    expect(res.body.data[0].voice.transcript).toMatch(/в комнате разговаривают/);
+  });
+
+  test('once the owner shares it, the public form carries it', async () => {
+    const patched = await request(app).patch(`/create-form/${PID}`).set('Cookie', cookieA)
+      .send({ ...formBody, publicAccess: true, voice: { public: true } });
+    expect(patched.status).toBe(200);
+
+    const res = await request(app).get(`/public-form/${PID}`);
+    expect(res.body.data.voice.transcript).toMatch(/в комнате разговаривают/);
+    expect(res.body.data.voice.track.url).toBe('/api/uploads/a-track.mp3');
+  });
+
+  test('sharing the audio does not let the client rewrite the transcript', async () => {
+    await request(app).patch(`/create-form/${PID}`).set('Cookie', cookieA)
+      .send({ ...formBody, publicAccess: true, voice: { public: true, transcript: 'подмена' } });
+
+    const form = await getForm();
+    expect(form.voice.transcript).toMatch(/в комнате разговаривают/);
+    expect(form.voice.public).toBe(true);
+  });
+
+  test('a tasting saved with a recording is not published on creation', async () => {
+    // The wizard cannot know what else ended up on the tape, so publicAccess
+    // is forced off at creation even when the form asked for it.
+    const fresh = '77777777-7777-4777-8777-777777777778';
+    const res = await request(app).post(`/create-form/${fresh}`).set('Cookie', cookieA).send({
+      ...formBody,
+      publicAccess: true,
+      voice: { segments: [{ url: '/api/uploads/b-1.mp3', brewingNumber: 0, duration: 5 }] },
     });
+    expect(res.status).toBe(200);
 
-    test('the public feed does not expose it either', async () => {
-        const res = await request(app).get('/public-forms');
-        expect(res.status).toBe(200);
-        const mine = res.body.data.find((form) => form.sessionId === PID);
-        expect(mine).toBeDefined();
-        expect(mine.voice).toBeUndefined();
-        expect(JSON.stringify(res.body)).not.toContain('a-track.mp3');
-    });
+    const created = await TeaForm.findOne({ owner: userIdA, sessionId: fresh });
+    expect(created.publicAccess).toBe(false);
+    expect(created.voice.public).toBe(false);
 
-    test('the owner still sees their own recording', async () => {
-        const res = await request(app).get(`/my-form/${PID}`).set('Cookie', cookieA);
-        expect(res.status).toBe(200);
-        // This endpoint answers with find(), so data is an array.
-        expect(res.body.data[0].voice.transcript).toMatch(/в комнате разговаривают/);
-    });
-
-    test('once the owner shares it, the public form carries it', async () => {
-        const patched = await request(app).patch(`/create-form/${PID}`).set('Cookie', cookieA)
-            .send({ ...formBody, publicAccess: true, voice: { public: true } });
-        expect(patched.status).toBe(200);
-
-        const res = await request(app).get(`/public-form/${PID}`);
-        expect(res.body.data.voice.transcript).toMatch(/в комнате разговаривают/);
-        expect(res.body.data.voice.track.url).toBe('/api/uploads/a-track.mp3');
-    });
-
-    test('sharing the audio does not let the client rewrite the transcript', async () => {
-        await request(app).patch(`/create-form/${PID}`).set('Cookie', cookieA)
-            .send({ ...formBody, publicAccess: true, voice: { public: true, transcript: 'подмена' } });
-
-        const form = await getForm();
-        expect(form.voice.transcript).toMatch(/в комнате разговаривают/);
-        expect(form.voice.public).toBe(true);
-    });
-
-    test('a tasting saved with a recording is not published on creation', async () => {
-        // The wizard cannot know what else ended up on the tape, so publicAccess
-        // is forced off at creation even when the form asked for it.
-        const fresh = '77777777-7777-4777-8777-777777777778';
-        const res = await request(app).post(`/create-form/${fresh}`).set('Cookie', cookieA).send({
-            ...formBody,
-            publicAccess: true,
-            voice: { segments: [{ url: '/api/uploads/b-1.mp3', brewingNumber: 0, duration: 5 }] },
-        });
-        expect(res.status).toBe(200);
-
-        const created = await TeaForm.findOne({ owner: userIdA, sessionId: fresh });
-        expect(created.publicAccess).toBe(false);
-        expect(created.voice.public).toBe(false);
-
-        await TeaForm.deleteOne({ _id: created._id });
-    });
+    await TeaForm.deleteOne({ _id: created._id });
+  });
 });
 
 describe('deleting the form', () => {

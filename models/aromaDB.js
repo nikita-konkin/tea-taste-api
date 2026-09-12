@@ -4,28 +4,28 @@ const mongoose = require('mongoose');
 const descriptorSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true
+    required: true,
   },
   descriptors: {
     type: [String], // Массив строк для описания
-    required: true
-  }
+    required: true,
+  },
 });
 
 // Схема для самой категории аромата
 const aromaSchema = new mongoose.Schema({
   category: {
     type: String,
-    required: true
+    required: true,
   },
   subcategories: {
     type: [descriptorSchema], // Массив подкатегорий для каждой категории
-    required: true
-  }
+    required: true,
+  },
 });
 
 // Модель для аромата
 // const Aroma = mongoose.model('Aroma', aromaSchema);
 
 // module.exports = Aroma;
-module.exports = mongoose.model("aromaDB", aromaSchema);
+module.exports = mongoose.model('aromaDB', aromaSchema);

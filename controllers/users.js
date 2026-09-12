@@ -81,7 +81,6 @@ module.exports.updateUserProfile = (req, res, next) => {
       });
     })
     .catch((err) => {
-
       if (err.name === 'ValidationError') {
         const e = new Error(t(req, 'api.badData'));
         e.statusCode = 400;

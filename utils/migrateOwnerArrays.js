@@ -20,7 +20,7 @@ const uri = process.env.API_MONGO_URI || 'mongodb://localhost:27017/teadb';
     for (const name of collections) {
       const res = await mongoose.connection.db.collection(name).updateMany(
         { owner: { $type: 'array' } },
-        [{ $set: { owner: { $first: '$owner' } } }]
+        [{ $set: { owner: { $first: '$owner' } } }],
       );
       console.log(`${name}: migrated ${res.modifiedCount} document(s)`);
     }

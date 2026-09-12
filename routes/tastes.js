@@ -1,9 +1,9 @@
-const privateRouter = require("express").Router();
-const publicRouter = require("express").Router();
+const privateRouter = require('express').Router();
+const publicRouter = require('express').Router();
 
-const { celebrate, Joi } = require("celebrate");
+const { celebrate, Joi } = require('celebrate');
 
-const { 
+const {
   createTaste,
   delTasteBySessionID,
   getTastes,
@@ -11,10 +11,10 @@ const {
   delTasteSelective,
   getAllFromTasteDB,
   getPublicTastes,
-   } = require("../controllers/tastes");
+} = require('../controllers/tastes');
 
 privateRouter.post(
-  "/my-tastes/:sessionId/brew/:brewId/taste/:tasteId",
+  '/my-tastes/:sessionId/brew/:brewId/taste/:tasteId',
   celebrate({
     body: Joi.object().keys({
       tasteStage1: Joi.string().min(2).max(30).required(),
@@ -28,10 +28,10 @@ privateRouter.post(
       tasteId: Joi.number().integer().required(),
     }),
   }),
-  createTaste
+  createTaste,
 );
 privateRouter.patch(
-  "/my-tastes/:sessionId/brew/:brewId/taste/:tasteId",
+  '/my-tastes/:sessionId/brew/:brewId/taste/:tasteId',
   celebrate({
     body: Joi.object().keys({
       tasteStage1: Joi.string().min(2).max(30),
@@ -45,15 +45,14 @@ privateRouter.patch(
       tasteId: Joi.number().integer().required(),
     }),
   }),
-  patchTaste
+  patchTaste,
 );
-privateRouter.get("/my-tastes/:sessionId", getTastes);
-privateRouter.get("/tastedb", getAllFromTasteDB);
-privateRouter.delete("/my-tastes/:sessionId", delTasteBySessionID);
-privateRouter.delete("/my-tastes/:sessionId/brew/:brewId/taste/:tasteId", delTasteSelective);
+privateRouter.get('/my-tastes/:sessionId', getTastes);
+privateRouter.get('/tastedb', getAllFromTasteDB);
+privateRouter.delete('/my-tastes/:sessionId', delTasteBySessionID);
+privateRouter.delete('/my-tastes/:sessionId/brew/:brewId/taste/:tasteId', delTasteSelective);
 
-publicRouter.get("/public-tastes/:sessionId", getPublicTastes);
-
+publicRouter.get('/public-tastes/:sessionId', getPublicTastes);
 
 module.exports.publicRouter = publicRouter;
 module.exports.privateRouter = privateRouter;

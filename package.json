@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "lint": "npx eslint .",
+    "lint": "eslint .",
     "test": "jest --runInBand --forceExit"
   },
   "jest": {
@@ -49,6 +49,9 @@
   },
   "homepage": "https://github.com/nikita-konkin/tea-taste-api#readme",
   "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.1",
     "jest": "^29.7.0",
     "nodemon": "^2.0.16",
     "supertest": "^6.3.4"

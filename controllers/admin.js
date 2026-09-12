@@ -169,7 +169,7 @@ module.exports.deleteForm = async (req, res, next) => {
     const form = await Teaform.findOne({ sessionId });
     if (!form) return fail(next, 404, 'Запись не найдена.');
 
-    const owner = form.owner;
+    const { owner } = form;
     const urls = formFileUrls(form);
 
     await Promise.all([

@@ -93,7 +93,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Methods', allowedMethods);
     res.header(
       'Access-Control-Allow-Headers',
-      req.headers['access-control-request-headers'] || 'Content-Type, Authorization'
+      req.headers['access-control-request-headers'] || 'Content-Type, Authorization',
     );
     return res.sendStatus(204);
   }
@@ -109,6 +109,7 @@ app.use(require('./routes/teaforms').publicRouter);
 app.use(require('./routes/aromas').publicRouter);
 app.use(require('./routes/tastes').publicRouter);
 app.use(require('./routes/brewings').publicRouter);
+
 app.use(auth);
 app.use(require('./routes/users'));
 app.use(require('./routes/uploads').privateRouter);

@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
@@ -98,7 +98,7 @@ const userSchema = new mongoose.Schema(
     },
     blockedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "user",
+      ref: 'user',
     },
     averageRating: {
       type: Number,
@@ -115,7 +115,7 @@ const userSchema = new mongoose.Schema(
     photos: [
       {
         url: { type: String, required: true },
-        kind: { type: String, enum: ["dry", "liquor", "wet"], required: true },
+        kind: { type: String, enum: ['dry', 'liquor', 'wet'], required: true },
         // 320px WebP for the feed, written at upload time. Optional: photos
         // uploaded before it existed have none, and the card falls back to the
         // full-size original for those.
@@ -202,8 +202,8 @@ const userSchema = new mongoose.Schema(
       public: { type: Boolean, default: false },
       status: {
         type: String,
-        enum: ["idle", "queued", "processing", "done", "error"],
-        default: "idle",
+        enum: ['idle', 'queued', 'processing', 'done', 'error'],
+        default: 'idle',
       },
       operationId: { type: String },
       error: { type: String },
@@ -216,7 +216,7 @@ const userSchema = new mongoose.Schema(
 
     owner: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "user",
+      ref: 'user',
       required: true,
     },
     sessionId: {
@@ -233,7 +233,7 @@ const userSchema = new mongoose.Schema(
       required: false,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 userSchema.index({ owner: 1, sessionId: 1 });
@@ -243,4 +243,4 @@ userSchema.index({ publicAccess: 1, createdAt: -1 });
 // but the first.
 userSchema.index({ slug: 1 }, { unique: true, sparse: true });
 
-module.exports = mongoose.model("teaform", userSchema);
+module.exports = mongoose.model('teaform', userSchema);
