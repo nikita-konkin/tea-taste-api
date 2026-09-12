@@ -24,7 +24,7 @@ const { getSettings } = require('../utils/settings');
 
 const passwordSchema = Joi.string()
   .required()
-  .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};\'":|,.<>\\/?]).{4,30}$'))
+  .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};'":|,.<>/?]).{4,30}$/)
   .min(4)
   .label('пароль')
   .messages({
@@ -55,13 +55,7 @@ router.post('/sign-up', celebrate({
     email: emailSchema,
     password: passwordSchema,
   }),
-}),
-// (req, res) => {
-// console.log(req.body);
-// res.status(201).send(req.body);
-// }
-createUser,
-);
+}), createUser);
 
 router.post('/sign-out', logoutUser);
 

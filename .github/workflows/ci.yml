@@ -35,6 +35,9 @@ jobs:
             sudo apt-get install -y --no-install-recommends ffmpeg
           }
       - run: npm ci
+      # Before the tests, because it is the faster of the two and a lint error
+      # is usually a typo the tests would take three minutes to find.
+      - run: npm run lint
       - run: npm test
         env:
           API_MONGO_URI: mongodb://localhost:27017/tea-taste-test

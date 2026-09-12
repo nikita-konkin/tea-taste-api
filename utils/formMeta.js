@@ -58,7 +58,7 @@ const formDescription = (form, brewings = [], locale = DEFAULT_LOCALE) => {
 // Schema.org for the tasting itself. A dated, authored, rated write-up of a
 // named product is a Review — the type search engines can actually show a
 // rating for.
-const formJsonLd = (form, brewings = [], previewUrl, locale = DEFAULT_LOCALE) => {
+const formJsonLd = (form, previewUrl, locale = DEFAULT_LOCALE) => {
   const author = Array.isArray(form.owner) ? form.owner[0] : form.owner;
   return {
     '@context': 'https://schema.org',

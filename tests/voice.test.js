@@ -800,11 +800,11 @@ describe('the recording is withheld from public views until shared', () => {
     });
     expect(res.status).toBe(200);
 
-    const created = await TeaForm.findOne({ owner: userIdA, sessionId: fresh });
-    expect(created.publicAccess).toBe(false);
-    expect(created.voice.public).toBe(false);
+    const saved = await TeaForm.findOne({ owner: userIdA, sessionId: fresh });
+    expect(saved.publicAccess).toBe(false);
+    expect(saved.voice.public).toBe(false);
 
-    await TeaForm.deleteOne({ _id: created._id });
+    await TeaForm.deleteOne({ _id: saved._id });
   });
 });
 
@@ -821,7 +821,7 @@ describe('deleting the form', () => {
     expect(res.status).toBe(200);
 
     // The unlink is fired on response finish, so give the event loop a tick.
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => { setTimeout(resolve, 300); });
     expect(fs.existsSync(path.join(uploadDir, path.basename(segment)))).toBe(false);
     expect(fs.existsSync(path.join(uploadDir, path.basename(track)))).toBe(false);
   }, 30000);

@@ -97,7 +97,7 @@ app.use((req, res, next) => {
     );
     return res.sendStatus(204);
   }
-  next();
+  return next();
 });
 
 // Routes
@@ -139,10 +139,13 @@ app.use((err, req, res, next) => {
       message: errorDetails.body?.[0] || 'Validation error',
     });
   }
-  next(err);
+  return next(err);
 });
 
 // generic errors
+// Express identifies an error handler by its arity, so the fourth parameter has
+// to be declared even though nothing here forwards to it: this is the last one.
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
   console.error('Error:', err.message);

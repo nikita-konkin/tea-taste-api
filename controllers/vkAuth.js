@@ -138,9 +138,9 @@ module.exports.vkCallback = async (req, res) => {
     );
     res.cookie('jwt', token, {
       maxAge: 180 * 24 * 60 * 60 * 1000,
-      httpOnly: NODE_ENV == 'production',
+      httpOnly: NODE_ENV === 'production',
       secure: NODE_ENV === 'production',
-      domain: NODE_ENV == 'production' ? '.teaform.ru' : '',
+      domain: NODE_ENV === 'production' ? '.teaform.ru' : '',
     });
 
     // An existing account's own stored preference wins over the page they

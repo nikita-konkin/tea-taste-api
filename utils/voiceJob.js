@@ -89,13 +89,17 @@ const joinParts = (parts, key) => {
   return rows.map((row) => `${partLabel(row.part)}. ${row.text}`).join('\n');
 };
 
+// Declared once, outside the loop: a closure built per iteration over a `wait`
+// that the loop reassigns is the shape that silently captures the wrong delay.
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
 const pollTranscript = async (operationId) => {
   const deadline = Date.now() + POLL_DEADLINE_MS;
   let wait = POLL_START_MS;
 
   /* eslint-disable no-await-in-loop */
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, wait));
+    await sleep(wait);
     wait = Math.min(Math.round(wait * 1.5), POLL_MAX_MS);
     if (await speechkit.isDone(operationId)) return speechkit.fetchTranscript(operationId);
   }
@@ -130,31 +134,6 @@ const submitGroup = async (files) => {
     if (squeezed.squeezed) await fs.promises.unlink(squeezed.path).catch(() => {});
     if (joinedPath) await fs.promises.unlink(joinedPath).catch(() => {});
   }
-};
-
-// Every group submitted, then every group polled — in that order, and with the
-// operation ids written down in between. A restart between the two halves would
-// otherwise pay SpeechKit a second time for recognition already bought.
-const transcribe = async (owner, sessionId, groups, seconds) => {
-  // Booked before the upload: refusing afterwards would still be billed.
-  const quota = await reserve(owner, seconds);
-  if (!quota.ok) return fail(owner, sessionId, quota.reason);
-
-  const pending = [];
-  /* eslint-disable no-await-in-loop */
-  for (const group of groups) {
-    const submitted = await submitGroup(group.files);
-    if (!submitted.ok) return fail(owner, sessionId, submitted.reason);
-    pending.push({
-      brewingNumber: group.n,
-      whole: Boolean(group.whole),
-      operationId: submitted.operationId,
-    });
-  }
-  /* eslint-enable no-await-in-loop */
-
-  await setVoice(owner, sessionId, { pending, status: 'processing' });
-  return collect(owner, sessionId, pending);
 };
 
 // Collects what was submitted and stores it attributed to its пролив.
@@ -193,6 +172,31 @@ const collect = async (owner, sessionId, pending) => {
     extraction: null,
     extractedAt: null,
   });
+};
+
+// Every group submitted, then every group polled — in that order, and with the
+// operation ids written down in between. A restart between the two halves would
+// otherwise pay SpeechKit a second time for recognition already bought.
+const transcribe = async (owner, sessionId, groups, seconds) => {
+  // Booked before the upload: refusing afterwards would still be billed.
+  const quota = await reserve(owner, seconds);
+  if (!quota.ok) return fail(owner, sessionId, quota.reason);
+
+  const pending = [];
+  /* eslint-disable no-await-in-loop */
+  for (const group of groups) {
+    const submitted = await submitGroup(group.files);
+    if (!submitted.ok) return fail(owner, sessionId, submitted.reason);
+    pending.push({
+      brewingNumber: group.n,
+      whole: Boolean(group.whole),
+      operationId: submitted.operationId,
+    });
+  }
+  /* eslint-enable no-await-in-loop */
+
+  await setVoice(owner, sessionId, { pending, status: 'processing' });
+  return collect(owner, sessionId, pending);
 };
 
 // Merge, then recognise. Resumable: called with an operationId it skips straight
@@ -248,9 +252,12 @@ const run = async (owner, sessionId, resumeOperationId) => {
       const groupFiles = [];
       for (const segment of segs) {
         const filename = path.basename(String(segment.url || ''));
-        if (!ownsUpload(filename, owner)) continue;
-        const file = path.join(uploadDir, filename);
-        if (await readable(file)) groupFiles.push(file);
+        // Another account's upload url in someone's draft is the one thing that
+        // must never be recognised on this owner's quota.
+        if (ownsUpload(filename, owner)) {
+          const file = path.join(uploadDir, filename);
+          if (await readable(file)) groupFiles.push(file);
+        }
       }
       if (groupFiles.length) groups.push({ n, whole, files: groupFiles });
     }

@@ -38,13 +38,13 @@ const uri = process.env.API_MONGO_URI || 'mongodb://localhost:27017/teadb';
       const slug = buildSlug(form.nameRU, form.sessionId);
       if (!slug) {
         skipped.push(`${form._id} (no sessionId)`);
-        continue;
-      }
-      try {
-        await forms.updateOne({ _id: form._id }, { $set: { slug } });
-        written += 1;
-      } catch (err) {
-        skipped.push(`${form._id} -> ${slug}: ${err.message}`);
+      } else {
+        try {
+          await forms.updateOne({ _id: form._id }, { $set: { slug } });
+          written += 1;
+        } catch (err) {
+          skipped.push(`${form._id} -> ${slug}: ${err.message}`);
+        }
       }
     }
 

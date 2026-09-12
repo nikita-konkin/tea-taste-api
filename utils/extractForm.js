@@ -66,13 +66,19 @@ const norm = (text) => String(text || '')
   .replace(/ё/g, 'е')
   .replace(/[^a-zа-я0-9]+/gi, '');
 
+// "Другое" is a real category, so it resolves — but as a descriptor it says
+// nothing, and it would appear on most tastings once resolution stopped dropping
+// near-misses. Discarded outright rather than pushed to `dropped`: «Также
+// прозвучало: Другое» in the description would be worse than losing it.
+const CATCH_ALL = new Set([norm('Другое')]);
+
 // Two lookups over the vocabulary: the whole path, and each path's final
 // segment. The second is what rescues a near-miss — the model reliably names the
 // right descriptor and guesses the wrong branch above it.
-const buildIndex = (known) => {
+const buildIndex = (vocabulary) => {
   const byPath = new Map();
   const byLeaf = new Map();
-  known.forEach((path) => {
+  vocabulary.forEach((path) => {
     byPath.set(norm(path), path);
     const leaf = norm(path.split(SEP).pop());
     // First writer wins, so the answer for a given word never depends on Set
@@ -101,21 +107,16 @@ const resolvePath = (raw, index) => {
     // otherwise match on its "Другое" half and be discarded as meaningless,
     // losing the descriptor entirely instead of letting it fall through to the
     // пролив description.
-    if (CATCH_ALL.has(norm(segment))) continue;
-    const hit = index.byLeaf.get(norm(segment));
-    if (hit && !CATCH_ALL.has(norm(hit))) return hit;
+    if (!CATCH_ALL.has(norm(segment))) {
+      const hit = index.byLeaf.get(norm(segment));
+      if (hit && !CATCH_ALL.has(norm(hit))) return hit;
+    }
   }
   return null;
 };
 
-// "Другое" is a real category, so it resolves — but as a descriptor it says
-// nothing, and it would appear on most tastings once resolution stopped dropping
-// near-misses. Discarded outright rather than pushed to `dropped`: «Также
-// прозвучало: Другое» in the description would be worse than losing it.
-const CATCH_ALL = new Set([norm('Другое')]);
-
-const keepKnown = (paths, known) => {
-  const index = buildIndex(known);
+const keepKnown = (paths, vocabulary) => {
+  const index = buildIndex(vocabulary);
   const kept = [];
   const dropped = [];
 

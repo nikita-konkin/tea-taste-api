@@ -18,7 +18,9 @@ async function deliverResetLink(email, link) {
     return;
   }
 
-  // Lazy require: nodemailer is only needed when SMTP is configured.
+  // Lazy require: nodemailer is only needed when SMTP is configured, and it is
+  // a heavy dependency to pull into every process that merely imports this.
+  // eslint-disable-next-line global-require
   const nodemailer = require('nodemailer');
   const transport = nodemailer.createTransport({
     host: SMTP_HOST,

@@ -260,8 +260,8 @@ module.exports.getSitemap = async (req, res, next) => {
       // One hub per tea type. Listed unconditionally: a type with nothing in it
       // yet is a page that will fill up, and dropping it from the sitemap only
       // delays the day it is crawled.
-      ...teaTypeSlugs.map((t) => ({
-        path: `/blog/type/${t.slug}`,
+      ...teaTypeSlugs.map((type) => ({
+        path: `/blog/type/${type.slug}`,
         priority: '0.8',
         changefreq: 'weekly',
         lastmod: feedLastmod,

@@ -53,9 +53,20 @@ module.exports = {
       files: ['utils/messages.js', 'utils/descriptors.js', 'utils/options.js', 'utils/teaTypes.js'],
       rules: {
         indent: 'off',
+        'no-tabs': 'off',
         quotes: 'off',
         'quote-props': 'off',
         'max-len': 'off',
+      },
+    },
+    {
+      // Tests reach for a module mid-file to stub it, await inside a loop to
+      // drive a sequence of requests in order, and name a render result after
+      // what it is. Each of those is the point of the test, not a slip.
+      files: ['tests/**'],
+      rules: {
+        'global-require': 'off',
+        'no-await-in-loop': 'off',
       },
     },
     {

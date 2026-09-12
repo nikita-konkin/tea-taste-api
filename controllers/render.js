@@ -23,8 +23,8 @@ const Taste = require('../models/taste');
 const { publicFormFilter, PUBLIC_FEED_SORTS } = require('./teaforms');
 const { teaTypeSlugs, teaTypeBySlug, teaTypeShort, teaTypeName } = require('../utils/teaTypes');
 const {
-  LOCALES, DEFAULT_LOCALE, LOCALE_TAG, OG_LOCALE, PLURALS,
-  localeFromPath, localizePath, translate, pluralize,
+  LOCALES, DEFAULT_LOCALE, LOCALE_TAG, OG_LOCALE,
+  localeFromPath, localizePath, translate,
 } = require('../utils/locale');
 const { translateDescriptorPath } = require('../utils/descriptors');
 const { translateOption } = require('../utils/options');
@@ -62,9 +62,8 @@ const head = ({
   // alternates below cannot disagree about where this page lives.
   const bare = path || '/';
   const url = `${ORIGIN}${localizePath(bare, locale)}`;
-  const preview = image
-    ? (image.startsWith('http') ? image : `${ORIGIN}${image}`)
-    : `${ORIGIN}/logo512.png`;
+  const absolute = (src) => (src.startsWith('http') ? src : `${ORIGIN}${src}`);
+  const preview = image ? absolute(image) : `${ORIGIN}/logo512.png`;
 
   return [
     '<meta charset="utf-8" />',
@@ -193,16 +192,19 @@ const renderFeed = async (req, res, next) => {
 
     const typeName = teaType ? teaTypeShort(teaType, locale) : '';
     const heading = teaType ? T('feed.typeHeading', { type: typeName }) : T('feed.public');
-    const title = teaType
-      ? (page_ > 1
-        ? T('feed.typeTitlePage', { type: typeName, page: page_ })
-        : T('feed.typeTitle', { type: typeName }))
-      : (page_ > 1 ? T('feed.titlePage', { page: page_ }) : T('feed.title'));
+    // Four titles: the feed or one tea type, first page or a later one. Written
+    // out rather than nested, because a page number in the wrong one of these is
+    // a duplicate <title> across pages, which is exactly what a crawler punishes.
+    const titleKey = () => {
+      if (teaType) return page_ > 1 ? 'feed.typeTitlePage' : 'feed.typeTitle';
+      return page_ > 1 ? 'feed.titlePage' : 'feed.title';
+    };
+    const title = T(titleKey(), { type: typeName, page: page_ });
     const description = teaType
       ? T('feed.typeDescription', { type: typeName })
       : T('feed.description');
 
-    const items = forms.map((form, i) => {
+    const items = forms.map((form) => {
       const author = Array.isArray(form.owner) ? form.owner[0] : form.owner;
       const url = localizePath(formUrl(form), locale);
       const photo = photoUrl(form);
@@ -354,7 +356,7 @@ const renderForm = async (req, res, next) => {
         path: canonical,
         type: 'article',
         locale,
-        jsonLd: formJsonLd(form, brewings, preview, locale),
+        jsonLd: formJsonLd(form, preview, locale),
       },
       body: `    <article>
       <h1>${esc(form.nameRU)}</h1>

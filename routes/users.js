@@ -18,7 +18,7 @@ const { LOCALES } = require('../utils/locale');
 // Same password rules as at sign-up (see routes/signs.js).
 const passwordSchema = Joi.string()
   .required()
-  .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};\'":|,.<>\\/?]).{4,30}$'))
+  .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};'":|,.<>/?]).{4,30}$/)
   .min(4)
   .label('пароль')
   .messages({
